@@ -5,6 +5,7 @@ ENTRY(_start)
 CODE_ALIGNMENT = 4; /* Align code on a 4 byte boundary */
 DATA_ALIGNMENT = 8; /* Align data on a 8 byte boundary */
 
+_uart = 0x10000000;
 _mtime = 0x200bff8;
 _mtimecmp = 0x2004000;
 

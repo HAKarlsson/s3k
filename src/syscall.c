@@ -5,7 +5,6 @@
 #include "common.h"
 #include "consts.h"
 #include "csr.h"
-#include "current.h"
 #include "schedule.h"
 #include "timer.h"
 #include "trap.h"
@@ -27,7 +26,8 @@ static void _setreg(struct proc *proc, uint64_t reg, uint64_t val)
 		proc_load_pmp(proc);
 }
 
-void syscall_proc(struct proc *proc, uint64_t a1, uint64_t a2, uint64_t a3)
+struct proc *syscall_proc(struct proc *proc, uint64_t a1, uint64_t a2,
+			  uint64_t a3)
 {
 	switch (a1) {
 	case 0: /* Get process ID */
@@ -60,15 +60,17 @@ void syscall_proc(struct proc *proc, uint64_t a1, uint64_t a2, uint64_t a3)
 		proc->regs[REG_A0] = 0;
 		break;
 	}
+	return proc;
 }
 
-void syscall_getcap(struct proc *proc, uint64_t idx)
+struct proc *syscall_getcap(struct proc *proc, uint64_t idx)
 {
 	cnode_handle_t handle = cnode_get_handle(proc->pid, idx);
 	proc->regs[REG_A0] = cnode_get_cap(handle).raw;
+	return proc;
 }
 
-void syscall_movcap(struct proc *proc, uint64_t srcIdx, uint64_t dstIdx)
+struct proc *syscall_movcap(struct proc *proc, uint64_t srcIdx, uint64_t dstIdx)
 {
 	// Get handles
 	cnode_handle_t src_handle = cnode_get_handle(proc->pid, srcIdx);
@@ -76,11 +78,11 @@ void syscall_movcap(struct proc *proc, uint64_t srcIdx, uint64_t dstIdx)
 
 	if (!cnode_contains(src_handle)) {
 		proc->regs[REG_A0] = EXCPT_EMPTY;
-		return;
+		return proc;
 	}
 	if (cnode_contains(dst_handle)) {
 		proc->regs[REG_A0] = EXCPT_COLLISION;
-		return;
+		return proc;
 	}
 	syscall_lock();
 	if (cnode_contains(src_handle)) {
@@ -90,27 +92,30 @@ void syscall_movcap(struct proc *proc, uint64_t srcIdx, uint64_t dstIdx)
 		proc->regs[REG_A0] = EXCPT_EMPTY;
 	}
 	syscall_unlock();
+	return proc;
 }
 
-void syscall_delcap(struct proc *proc, uint64_t idx)
+struct proc *syscall_delcap(struct proc *proc, uint64_t idx)
 {
 	cnode_handle_t handle = cnode_get_handle(proc->pid, idx);
 	union cap cap = cnode_get_cap(handle);
 	if (!cnode_contains(handle)) {
 		proc->regs[REG_A0] = EXCPT_EMPTY;
-		return;
+		return proc;
 	}
 	syscall_lock();
 	if (cnode_contains(handle)) {
 		cnode_delete(handle);
-		if (cap.type == CAPTY_TIME)
+		proc->regs[REG_A0] = EXCPT_NONE;
+		if (cap.type == CAPTY_TIME) {
 			schedule_delete(cap.time.hartid, cap.time.free,
 					cap.time.end);
-		proc->regs[REG_A0] = EXCPT_NONE;
+		}
 	} else {
 		proc->regs[REG_A0] = EXCPT_EMPTY;
 	}
 	syscall_unlock();
+	return proc;
 }
 
 static void _revoke_time_hook(cnode_handle_t handle, union cap cap,
@@ -190,7 +195,7 @@ static void _revoke_socket_post_hook(cnode_handle_t handle, union cap cap)
 	/* This should be empty */
 }
 
-void syscall_revcap(struct proc *proc, uint64_t idx)
+struct proc *syscall_revcap(struct proc *proc, uint64_t idx)
 {
 	// Get handle
 	cnode_handle_t handle = cnode_get_handle(proc->pid, idx);
@@ -199,7 +204,7 @@ void syscall_revcap(struct proc *proc, uint64_t idx)
 	// If empty slot
 	if (!cnode_contains(handle)) {
 		proc->regs[REG_A0] = EXCPT_EMPTY;
-		return;
+		return proc;
 	}
 
 	bool (*is_parent)(union cap, union cap);
@@ -233,7 +238,7 @@ void syscall_revcap(struct proc *proc, uint64_t idx)
 		break;
 	default:
 		proc->regs[REG_A0] = EXCPT_NONE;
-		return;
+		return proc;
 	}
 
 	cnode_handle_t next_handle;
@@ -253,7 +258,7 @@ void syscall_revcap(struct proc *proc, uint64_t idx)
 
 	if (!cnode_contains(handle)) {
 		proc->regs[REG_A0] = EXCPT_EMPTY;
-		return;
+		return proc;
 	}
 	syscall_lock();
 	if (cnode_contains(handle)) {
@@ -263,6 +268,7 @@ void syscall_revcap(struct proc *proc, uint64_t idx)
 		proc->regs[REG_A0] = EXCPT_EMPTY;
 	}
 	syscall_unlock();
+	return proc;
 }
 
 static void _derive_time(cnode_handle_t orig_handle, union cap orig_cap,
@@ -300,7 +306,8 @@ static void _derive_channel(cnode_handle_t orig_handle, union cap orig_cap,
 		orig_cap.channel.free = drv_cap.channel.end;
 	} else {
 		orig_cap.channel.free = drv_cap.socket.channel + 1;
-		_listeners[drv_cap.socket.channel] = current_get();
+		struct proc *receiver = proc_get(cnode_get_pid(orig_handle));
+		_listeners[drv_cap.socket.channel] = receiver;
 	}
 	cnode_set_cap(orig_handle, orig_cap);
 }
@@ -311,8 +318,8 @@ static void _derive_socket(cnode_handle_t orig_handle, union cap orig_cap,
 	/* This should be empty */
 }
 
-void syscall_drvcap(struct proc *proc, uint64_t orig_idx, uint64_t drv_idx,
-		    union cap drv_cap)
+struct proc *syscall_drvcap(struct proc *proc, uint64_t orig_idx,
+			    uint64_t drv_idx, union cap drv_cap)
 {
 	// Get handle
 	cnode_handle_t orig_handle = cnode_get_handle(proc->pid, orig_idx);
@@ -321,10 +328,10 @@ void syscall_drvcap(struct proc *proc, uint64_t orig_idx, uint64_t drv_idx,
 
 	if (!cnode_contains(orig_handle)) { // If empty slot
 		proc->regs[REG_A0] = EXCPT_EMPTY;
-		return;
+		return proc;
 	} else if (cnode_contains(drv_handle)) { // If destination occupied
 		proc->regs[REG_A0] = EXCPT_COLLISION;
-		return;
+		return proc;
 	}
 
 	void (*hook)(cnode_handle_t, union cap, cnode_handle_t, union cap);
@@ -353,7 +360,7 @@ void syscall_drvcap(struct proc *proc, uint64_t orig_idx, uint64_t drv_idx,
 		break;
 	default:
 		proc->regs[REG_A0] = EXCPT_UNIMPLEMENTED;
-		return;
+		return proc;
 	}
 	if (!can_derive(orig_cap, drv_cap)) {
 		proc->regs[REG_A0] = EXCPT_DERIVATION;
@@ -368,4 +375,5 @@ void syscall_drvcap(struct proc *proc, uint64_t orig_idx, uint64_t drv_idx,
 		}
 		syscall_unlock();
 	}
+	return proc;
 }

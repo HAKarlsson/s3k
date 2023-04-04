@@ -43,8 +43,8 @@ static void handle_default(struct proc *proc, uint64_t mcause, uint64_t mepc,
 	proc->regs[REG_SP] = proc->regs[REG_TSP];
 }
 
-void handle_exception(struct proc *proc, uint64_t mcause, uint64_t mepc,
-		      uint64_t mtval)
+struct proc *handle_exception(struct proc *proc, uint64_t mcause, uint64_t mepc,
+			      uint64_t mtval)
 {
 	/* Check if it is a return from exception */
 	if (mcause == ILLEGAL_INSTRUCTION
@@ -55,4 +55,5 @@ void handle_exception(struct proc *proc, uint64_t mcause, uint64_t mepc,
 		// Handle default exception
 		handle_default(proc, mcause, mepc, mtval);
 	}
+	return proc;
 }

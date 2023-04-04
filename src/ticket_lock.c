@@ -1,3 +1,4 @@
+/* See LICENSE file for copyright and license details. */
 #include "ticket_lock.h"
 
 #include <stdint.h>

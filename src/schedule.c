@@ -4,7 +4,6 @@
 
 #include "consts.h"
 #include "csr.h"
-#include "current.h"
 #include "platform.h"
 #include "proc.h"
 #include "timer.h"
@@ -23,9 +22,8 @@ struct sched_entry schedule_get(uint64_t hartid, size_t i)
 void schedule_update(uint64_t hartid, uint64_t pid, uint64_t begin,
 		     uint64_t end)
 {
-	for (uint64_t i = begin; i < end; i++) {
+	for (uint64_t i = begin; i < end; i++)
 		_schedule[hartid][i] = (struct sched_entry){ pid, end - i };
-	}
 }
 
 void schedule_delete(uint64_t hartid, uint64_t begin, uint64_t end)
@@ -33,7 +31,7 @@ void schedule_delete(uint64_t hartid, uint64_t begin, uint64_t end)
 	schedule_update(hartid, NONE_PID, begin, end);
 }
 
-void schedule_next()
+struct proc *schedule_next()
 {
 	uint64_t hartid = csrr_mhartid();
 	uint64_t quantum;
@@ -60,23 +58,22 @@ retry:
 	uint64_t start_time = quantum * NTICK;
 	uint64_t end_time = start_time + entry.len * NTICK - NSLACK;
 
-	current_set(proc);
 	timeout_set(hartid, start_time);
 	while (!(csrr_mip() & (1 << 7))) {
 		wfi();
 	}
 	timeout_set(hartid, end_time);
+	return proc;
 }
 
-void schedule_yield(struct proc *proc)
+struct proc *schedule_yield(struct proc *proc)
 {
 	proc_release(proc);
-	schedule_next();
+	return schedule_next();
 }
 
 void schedule_init(void)
 {
-	for (int i = 0; i < NHART; i++) {
+	for (int i = 0; i < NHART; i++)
 		schedule_update(i, 0, 0, NSLICE);
-	}
 }

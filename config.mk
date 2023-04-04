@@ -16,10 +16,10 @@ OBJDUMP=${RISCV_PREFIX}objdump
 
 INC =-include ${CONFIG_H} -Iinc -I${PLATFORM}
 CFLAGS =-march=rv64imac -mabi=lp64 -mcmodel=medany\
-	-std=gnu17\
-	-Wall -Wextra -Werror\
-	-Wno-unused-parameter\
-	-Wshadow -fno-common\
+	-std=c11 \
+	-Wall -Wextra -Werror \
+	-Wno-unused-parameter \
+	-Wshadow -fno-common \
 	-ffunction-sections -fdata-sections\
 	-ffreestanding\
 	-Wno-builtin-declaration-mismatch\

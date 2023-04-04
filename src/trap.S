@@ -126,7 +126,6 @@ trap_entry:
 # Aftwerwards we go to trap exit.
 .exception:
 	# Save a0 (pcb pointer) so we know the process in context
-	mv   a0, tp
 	csrr a1, mcause
 	csrr a2, mepc
 	csrr a3, mtval
@@ -139,18 +138,15 @@ trap_entry:
 # before continuing to the interrupt subroutine.
 .machine_interrupt:
 	csrrw	tp,mscratch,zero
-	.option push
-	.option norelax
-	la      gp, __global_pointer$
-	.option pop
-	load_sp t1
+# In case stack is too small, then uncomment below macro
+#	load_sp t1
+
 	# fallthrough to .interrupt
 
 # This subroutine handles interrupts.
 # We only have timer interrupts so we invoke the scheduler
 # schedule_yield(proc).
 .interrupt:
-	mv   a0, tp
 	la ra,schedule_yield
 	j .call
 
@@ -190,6 +186,8 @@ trap_entry:
 # This function restores the user context.
 # The function is preemptable while the tp points to the PCB.
 trap_exit:
+	# Set TP to PCB, in case of interrupt, TP is preserved.
+	mv tp,a0
 	# Enable preemption by setting the machine interrupt enable bit
 	# in mstatus
 	csrw mstatus, MSTATUS_MIE

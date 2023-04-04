@@ -25,8 +25,9 @@
  * @param mcause  The value of the mcause register
  * @param mepc  The value of the mepc register
  * @param mtval  The value of the mtval register
+ * @param Returns proc.
  */
-void handle_exception(struct proc *proc, uint64_t mcause, uint64_t mepc,
-		      uint64_t mtval);
+struct proc *handle_exception(struct proc *proc, uint64_t mcause, uint64_t mepc,
+			      uint64_t mtval);
 
 #endif /* __EXCEPTION_H__ */

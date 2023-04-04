@@ -2,18 +2,18 @@
 
 #include <stdarg.h>
 
-#define UART_BASE ((volatile unsigned char *)0x10000000)
+extern volatile char _uart[];
 
 int alt_getchar(void)
 {
-	while (!(UART_BASE[5] & 1))
+	while (!(_uart[5] & 1))
 		;
-	return UART_BASE[0];
+	return _uart[0];
 }
 
 int alt_putchar(char c)
 {
-	UART_BASE[0] = c;
+	_uart[0] = c;
 	return c;
 }
 

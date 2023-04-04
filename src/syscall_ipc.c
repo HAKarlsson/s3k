@@ -5,24 +5,25 @@
 
 struct proc *_listeners[NCHANNEL];
 
-void syscall_recv(struct proc *proc, uint64_t recv_idx, uint64_t cap_dest)
+struct proc *syscall_recv(struct proc *proc, uint64_t recv_idx,
+			  uint64_t cap_dest)
 {
 	cnode_handle_t recv_cap_handle = cnode_get_handle(proc->pid, recv_idx);
 	union cap recv_cap = cnode_get_cap(recv_cap_handle);
 	if (!cnode_contains(recv_cap_handle)) {
 		proc->regs[REG_A0] = EXCPT_EMPTY;
-		return;
+		return proc;
 	}
 	if (recv_cap.type != CAPTY_SOCKET || recv_cap.socket.tag != 0) {
 		proc->regs[REG_A0] = EXCPT_INVALID_CAP;
-		return;
+		return proc;
 	}
 	uint64_t channel = recv_cap.socket.channel;
 	syscall_lock();
 	if (!cnode_contains(recv_cap_handle)) {
 		proc->regs[REG_A0] = EXCPT_EMPTY;
 		syscall_unlock();
-		return;
+		return proc;
 	}
 
 	kassert(_listeners[channel] == proc);
@@ -32,40 +33,40 @@ void syscall_recv(struct proc *proc, uint64_t recv_idx, uint64_t cap_dest)
 	if (proc_ipc_wait(proc, channel)) {
 		// Waiting success
 		syscall_unlock();
-		schedule_next();
+		return schedule_next();
 	} else {
 		// Waiting failed, process is suspended.
 		syscall_unlock();
-		schedule_yield(proc);
+		return schedule_yield(proc);
 	}
 }
 
-void syscall_send(struct proc *proc, uint64_t send_idx, uint64_t msg0,
-		  uint64_t msg1, uint64_t msg2, uint64_t msg3, uint64_t cap_src,
-		  uint64_t yield)
+struct proc *syscall_send(struct proc *proc, uint64_t send_idx, uint64_t msg0,
+			  uint64_t msg1, uint64_t msg2, uint64_t msg3,
+			  uint64_t cap_src, uint64_t yield)
 {
 	cnode_handle_t send_cap_handle = cnode_get_handle(proc->pid, send_idx);
 	union cap send_cap = cnode_get_cap(send_cap_handle);
 	if (!cnode_contains(send_cap_handle)) {
 		proc->regs[REG_A0] = EXCPT_EMPTY;
-		return;
+		return proc;
 	}
 	if (send_cap.type != CAPTY_SOCKET || send_cap.socket.tag == 0) {
 		proc->regs[REG_A0] = EXCPT_INVALID_CAP;
-		return;
+		return proc;
 	}
 	uint64_t channel = send_cap.socket.channel;
 	struct proc *receiver = _listeners[channel];
 	if (receiver == NULL || !proc_ipc_acquire(receiver, channel)) {
 		proc->regs[REG_A0] = EXCPT_NO_RECEIVER;
-		return;
+		return proc;
 	}
 
 	syscall_lock();
 	if (!cnode_contains(send_cap_handle)) {
 		proc->regs[REG_A0] = EXCPT_EMPTY;
 		syscall_unlock();
-		return;
+		return proc;
 	}
 	// Check if we can send a capability.
 	uint64_t cap_dest = receiver->cap_dest;
@@ -76,7 +77,7 @@ void syscall_send(struct proc *proc, uint64_t send_idx, uint64_t msg0,
 		    || !cnode_contains(src_handle)) {
 			proc->regs[REG_A0] = EXCPT_SEND_CAP;
 			syscall_unlock();
-			return;
+			return proc;
 		}
 		union cap cap = cnode_get_cap(src_handle);
 		cnode_move(src_handle, dest_handle);
@@ -98,14 +99,16 @@ void syscall_send(struct proc *proc, uint64_t send_idx, uint64_t msg0,
 	proc->regs[REG_A0] = EXCPT_NONE;
 	syscall_unlock();
 	if (yield)
-		schedule_yield(proc);
+		return schedule_yield(proc);
+	return proc;
 }
 
-void syscall_sendrecv(struct proc *proc, uint64_t sendrecv_idx, uint64_t msg0,
-		      uint64_t msg1, uint64_t msg2, uint64_t msg3,
-		      uint64_t send_cap, uint64_t dest_cap)
+struct proc *syscall_sendrecv(struct proc *proc, uint64_t sendrecv_idx,
+			      uint64_t msg0, uint64_t msg1, uint64_t msg2,
+			      uint64_t msg3, uint64_t send_cap,
+			      uint64_t dest_cap)
 {
 	syscall_send(proc, sendrecv_idx >> 16, msg0, msg1, msg2, msg3, send_cap,
 		     false);
-	syscall_recv(proc, sendrecv_idx & 0xFFFF, dest_cap);
+	return syscall_recv(proc, sendrecv_idx & 0xFFFF, dest_cap);
 }

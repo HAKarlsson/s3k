@@ -1,3 +1,4 @@
+/* See LICENSE file for copyright and license details. */
 #include "timer.h"
 
 extern volatile uint64_t _mtime[];
