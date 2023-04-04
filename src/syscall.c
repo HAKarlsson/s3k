@@ -50,12 +50,10 @@ struct proc *syscall_proc(struct proc *proc, uint64_t a1, uint64_t a2,
 		break;
 	case 6: /* Yield the remaining time slice */
 		proc->sleep = timeout_get(csrr_mhartid());
-		schedule_yield(proc);
-		break;
+		return schedule_yield(proc);
 	case 7: /* Suspend */
 		proc_suspend(proc);
-		schedule_yield(proc);
-		break;
+		return schedule_yield(proc);
 	default:
 		proc->regs[REG_A0] = 0;
 		break;

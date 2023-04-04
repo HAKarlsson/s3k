@@ -11,22 +11,11 @@
 #include <stddef.h>
 #include <sys/time.h>
 
-struct proc *current;
 static uint64_t _mhartid;
 static uint64_t _time;
 static uint64_t _timeout[8];
 static uint64_t _pmpcfg0;
 static uint64_t _pmpaddr[8];
-
-void current_set(struct proc *proc)
-{
-	current = proc;
-}
-
-struct proc *current_get(void)
-{
-	return current;
-}
 
 void wfi(void)
 {

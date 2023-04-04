@@ -100,11 +100,12 @@ trap_entry:
 	# load user pc and tp
 	csrr  t0, mepc
 	csrrw t1, mscratch, zero
+
 	# save user pc and tp
 	sd    t0, (PC_OFFSET)(tp)
 	sd    t1, (TP_OFFSET)(tp)
 
-	# Do not touch a0-a8, and t0 as they are used in syscall
+	# Do not touch a0-a8, and t0 as they are used in syscall!
 
 	# Load the global pointer and stack pointer of the kernel.
 	.option push
@@ -115,9 +116,12 @@ trap_entry:
 
 	csrr t1, mcause
 
-	bltz t1, .interrupt   # mcause < 0 ==> interupt
+	# mcause < 0 ==> interupt
+	bltz t1, .interrupt
+
+	# If mcause = 8, then syscall
 	li   t2, USER_ECALL
-	beq  t1, t2, .syscall # if mcause = 8, then syscall
+	beq  t1, t2, .syscall
 
 	# fallthrough to .exception
 
@@ -138,8 +142,12 @@ trap_entry:
 # before continuing to the interrupt subroutine.
 .machine_interrupt:
 	csrrw	tp,mscratch,zero
-# In case stack is too small, then uncomment below macro
-#	load_sp t1
+
+	.option push
+	.option norelax
+	la      gp, __global_pointer$
+	.option pop
+	load_sp t1
 
 	# fallthrough to .interrupt
 
@@ -235,6 +243,7 @@ trap_exit:
 	# Load the user thread pointer.
 	ld   tp,(TP_OFFSET)(tp) # load user tp
 	# Return to the user.
+.trap_exit_ret:
 	mret
 
 # Table of jump instructions for system call functions. Aligned on 4-byte

@@ -55,7 +55,10 @@ retry:
 		proc_release(proc);
 		goto retry;
 	}
+
+	// Start time of a process
 	uint64_t start_time = quantum * NTICK;
+	// End time of a process
 	uint64_t end_time = start_time + entry.len * NTICK - NSLACK;
 
 	timeout_set(hartid, start_time);
