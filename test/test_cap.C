@@ -162,19 +162,19 @@ TEST_F(CapTest, MemoryDerive)
 				       CAP_MEMORY(0x100, 0x200, 7, CAP_RWX)));
 	// Bad permissions
 	EXPECT_FALSE(cap_memory_derive(CAP_MEMORY(0x0, 0x3000, 8, CAP_R),
-				      CAP_MEMORY(0x0, 0x2000, 8, CAP_RW)));
+				       CAP_MEMORY(0x0, 0x2000, 8, CAP_RW)));
 	EXPECT_FALSE(cap_memory_derive(CAP_MEMORY(0x0, 0x3000, 8, CAP_R),
-				      CAP_MEMORY(0x0, 0x2000, 8, CAP_RWX)));
+				       CAP_MEMORY(0x0, 0x2000, 8, CAP_RWX)));
 	EXPECT_FALSE(cap_memory_derive(CAP_MEMORY(0x0, 0x3000, 8, CAP_R),
-				      CAP_MEMORY(0x0, 0x2000, 8, CAP_RX)));
+				       CAP_MEMORY(0x0, 0x2000, 8, CAP_RX)));
 	EXPECT_FALSE(cap_memory_derive(CAP_MEMORY(0x0, 0x3000, 8, CAP_RW),
-				      CAP_MEMORY(0x0, 0x2000, 8, CAP_RWX)));
+				       CAP_MEMORY(0x0, 0x2000, 8, CAP_RWX)));
 	EXPECT_FALSE(cap_memory_derive(CAP_MEMORY(0x0, 0x3000, 8, CAP_RW),
-				      CAP_MEMORY(0x0, 0x2000, 8, CAP_RX)));
+				       CAP_MEMORY(0x0, 0x2000, 8, CAP_RX)));
 	EXPECT_FALSE(cap_memory_derive(CAP_MEMORY(0x0, 0x3000, 8, CAP_RX),
-				      CAP_MEMORY(0x0, 0x2000, 8, CAP_RWX)));
+				       CAP_MEMORY(0x0, 0x2000, 8, CAP_RWX)));
 	EXPECT_FALSE(cap_memory_derive(CAP_MEMORY(0x0, 0x3000, 8, CAP_RX),
-				      CAP_MEMORY(0x0, 0x2000, 8, CAP_RW)));
+				       CAP_MEMORY(0x0, 0x2000, 8, CAP_RW)));
 }
 
 TEST_F(CapTest, PmpAddr)

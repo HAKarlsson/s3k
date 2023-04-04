@@ -142,8 +142,7 @@ union s3k_cap {
 	uint64_t raw;	   ///< Capability as 64-bit word
 
 	struct {
-		uint64_t type : 4;   ///< Type of capability, should be
-				     ///< S3K_CAPTY_TIME.
+		uint64_t type : 4;
 		uint64_t unused : 4; ///< Padding, should be zero.
 		uint64_t hartid : 8; ///< Hardware Thread ID.
 		uint64_t begin : 16; ///< Beginning of time slice.
@@ -153,8 +152,7 @@ union s3k_cap {
 	} time;
 
 	struct {
-		uint64_t type : 4; ///< Type of capability, should be
-				   ///< S3K_CAPTY_MEMORY
+		uint64_t type : 4;
 		uint64_t lock : 1; ///< Prevents creating of memory capabilities
 		uint64_t rwx : 3;  ///< Read, write and execute (reverse order)
 		uint64_t offset : 8; ///< 128 MiB offset of memory slice
@@ -165,15 +163,13 @@ union s3k_cap {
 	} memory;
 
 	struct {
-		uint64_t type : 4;  ///< Type of capability, should be
-				    ///< S3K_CAPTY_PMP
+		uint64_t type : 4;
 		uint64_t addr : 52; ///< pmpaddr
 		uint64_t cfg : 8;   ///< pmpcfg
 	} pmp;
 
 	struct {
-		uint64_t type : 4; ///< Type of capability, should be
-				   ///< S3K_CAPTY_MONITOR
+		uint64_t type : 4;
 		uint64_t unused : 12; ///< Padding, should be zero
 		uint64_t begin : 16;  ///< Beginning of monitored PIDs.
 		uint64_t free : 16; ///< Beginning of available monitored PIDs.
