@@ -14,9 +14,10 @@
 
 static volatile struct sched_entry _schedule[NHART][NSLICE];
 
-struct sched_entry schedule_get(uint64_t hartid, size_t i)
+struct sched_entry schedule_get(uint64_t hartid, size_t quantum)
 {
-	return _schedule[hartid][i];
+	struct sched_entry entry = _schedule[hartid][quantum];
+	return entry;
 }
 
 void schedule_update(uint64_t hartid, uint64_t pid, uint64_t begin,
@@ -47,6 +48,8 @@ retry:
 
 	// Get the scheduled process
 	entry = schedule_get(hartid, quantum % NSLICE);
+
+	// If invalid, go back
 	if (entry.pid == NONE_PID)
 		goto retry;
 
@@ -97,6 +100,6 @@ struct proc *schedule_yield(struct proc *proc)
 
 void schedule_init(void)
 {
-	for (int i = 0; i < NHART; i++)
+	for (int i = MIN_HARTID; i <= MAX_HARTID; i++)
 		schedule_update(i, 0, 0, NSLICE);
 }

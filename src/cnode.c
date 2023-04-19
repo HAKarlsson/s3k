@@ -4,6 +4,7 @@
 #include "cap.h"
 #include "common.h"
 #include "consts.h"
+#include "init_caps.h"
 #include "kassert.h"
 
 struct cnode {
@@ -23,7 +24,7 @@ static void _insert(cnode_handle_t curr, union cap cap, cnode_handle_t prev)
 	_cnodes[curr].cap = cap;
 }
 
-void _delete(cnode_handle_t curr)
+static void _delete(cnode_handle_t curr)
 {
 	cnode_handle_t prev = _cnodes[curr].prev;
 	cnode_handle_t next = _cnodes[curr].next;
@@ -60,19 +61,21 @@ static bool _contains(cnode_handle_t curr)
 	return _cnodes[curr].cap.type != 0;
 }
 
-void cnode_init(const union cap *caps, size_t size)
+void cnode_init(void)
 {
 	// zero cnodes
 	for (int i = 0; i < NPROC * NCAP; ++i)
 		_cnodes[i] = (struct cnode){ 0 };
+
 	// Initialize root node
 	cnode_handle_t root = NPROC * NCAP;
 	_cnodes[root].prev = root;
 	_cnodes[root].next = root;
+
 	// Add initial nodes
 	int prev = root;
-	for (cnode_handle_t i = 0; i < size; i++) {
-		_insert(i, caps[i], prev);
+	for (cnode_handle_t i = 0; i < ARRAY_SIZE(init_caps); i++) {
+		_insert(i, init_caps[i], prev);
 		prev = i;
 	}
 }

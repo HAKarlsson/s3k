@@ -38,8 +38,6 @@
 #define MSTATUS_MIE 8
 #define SYSCALL_COUNT 16
 
-.globl trap_entry
-.globl trap_exit
 
 .section .text.trap
 
@@ -58,6 +56,8 @@
 # neither case is true, the handler falls through to the .exception label where
 # the exception is forwarded to the process.
 .balign  16
+.globl trap_entry
+.type trap_entry, @function
 trap_entry:
 	# save user tp to scratch, load PCB
 	csrrw tp, mscratch, tp
@@ -193,6 +193,8 @@ trap_entry:
 
 # This function restores the user context.
 # The function is preemptable while the tp points to the PCB.
+.globl trap_exit
+.type trap_exit, @function
 trap_exit:
 	# Set TP to PCB, in case of interrupt, TP is preserved.
 	mv tp,a0

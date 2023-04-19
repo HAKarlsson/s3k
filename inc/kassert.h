@@ -20,8 +20,6 @@
 
 #else /* NDEBUG */
 
-#include <stdint.h> // for uint64_t type
-
 /**
  * @brief Assertion failure handler.
  *
@@ -32,7 +30,7 @@
  * @param line The line number in the source file where the assertion failed.
  * @param expr The assertion expression that failed.
  */
-void kassert_failure(const char *file, uint64_t line, const char *expr);
+void kassert_failure(const char *file, unsigned long line, const char *expr);
 
 /**
  * @brief Asserts that an expression is true.

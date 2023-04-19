@@ -1,16 +1,15 @@
 // See LICENSE file for copyright and license details.
-#include "stack.h"
 #include "macro.inc"
-.globl _start
-.globl stack_top
 
 .extern init_kernel
-.extern sched_next
+.extern schedule_next
 .extern trap_entry
 .extern trap_exit
 
 .section .text.init
 
+.globl _start
+.type _start, @function
 _start:
 	// Load the global and stack pointers.
 	.option push
@@ -19,19 +18,26 @@ _start:
 	.option pop
 	load_sp t0
 
-
-
 	// Set trap entry/handler.
 	la   t0, trap_entry
 	csrw mtvec, t0
 
 	// Disable interrupts in machine mode.
 	csrw mstatus, 0
+	csrw mscratch,0
+
 	// Enable timer interrupts for user mode.
 	li   t0, (1<<7)
 	csrw mie, t0
 
-	// write zeros to be bss section
+	csrr	t0,mhartid
+	li	t1,MIN_HARTID
+	// If hartid < MIN_HARTID, park it
+	blt	t0,t1,_park
+	// If hartid == MIN_HARTID, initialize the system, else wait.
+	bne	t0,t1,_wait
+
+	// write zeros to the bss section
 	la t0, _bss
 	la t1, _end
 	j  2f
@@ -40,15 +46,31 @@ _start:
 2: 	bne t0, t1, 1b
 
 	// Initialize the kernel.
-	la a0,__payload
-	call init_kernel
+	call proc_init
+	call cnode_init
+	call schedule_init
+
+_signal:
+	fence
+	li t0,1
+	la t1,.done
+	sw t0, 0(t1)
+
+_wait:
+	la t1,.done
+	lw t0, 0(t1)
+	beqz t0, _wait
+	fence
+
 	// Schedule the boot process.
 	call schedule_next
+
 	// Load the boot process.
 	tail trap_exit
 
-.section .bss.stack
-.balign 8
-stack_start:
-	.space (STACK_SIZE * NHART)
-stack_top:
+_park:
+	wfi
+
+.data
+.done:	.word 0
+

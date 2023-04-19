@@ -6,15 +6,16 @@
 #include "kassert.h"
 
 static struct proc _processes[NPROC];
+extern unsigned char _payload[];
 
-void proc_init(uint64_t payload)
+void proc_init(void)
 {
-	for (int i = 1; i < NPROC; i++) {
-		_processes[i]
-		    = (struct proc){ .pid = i, .state = PS_SUSPENDED };
+	for (int i = 0; i < NPROC; i++) {
+		_processes[i].pid = i;
+		_processes[i].state = PS_SUSPENDED;
 	}
-	_processes[0] = (struct proc){ .pid = 0, .state = PS_READY };
-	_processes[0].regs[REG_PC] = payload;
+	_processes[0].state = PS_READY;
+	_processes[0].regs[REG_PC] = (uint64_t)_payload;
 }
 
 struct proc *proc_get(uint64_t pid)
@@ -82,29 +83,50 @@ bool proc_ipc_acquire(struct proc *proc, uint64_t channel_id)
 
 void proc_load_pmp(const struct proc *proc)
 {
-	uint64_t pmp = proc->regs[REG_PMP];
-	uint64_t pmpaddr[8];
+	uint8_t *pmp = (uint8_t *)&proc->regs[REG_PMP];
 	uint64_t pmpcfg = 0;
-	cnode_handle_t handle;
 	union cap cap;
-	for (int i = 0; i < 8; i++) {
-		handle = cnode_get_handle(proc->pid, pmp & 0xFF);
-		cap = cnode_get_cap(handle);
-		if (cap.type == CAPTY_PMP) {
-			pmpcfg |= (uint64_t)cap.pmp.cfg << (i * 8);
-			pmpaddr[i] = cap.pmp.addr;
-		} else {
-			pmpaddr[i] = 0;
-		}
-		pmp >>= 8;
+
+	cap = cnode_get_cap(cnode_get_handle(proc->pid, pmp[0]));
+	if (cap.type == CAPTY_PMP) {
+		pmpcfg |= (uint64_t)cap.pmp.cfg;
+		csrw_pmpaddr0((uint64_t)cap.pmp.addr);
 	}
+	cap = cnode_get_cap(cnode_get_handle(proc->pid, pmp[1]));
+	if (cap.type == CAPTY_PMP) {
+		pmpcfg |= (uint64_t)cap.pmp.cfg << 8;
+		csrw_pmpaddr1((uint64_t)cap.pmp.addr);
+	}
+	cap = cnode_get_cap(cnode_get_handle(proc->pid, pmp[2]));
+	if (cap.type == CAPTY_PMP) {
+		pmpcfg |= (uint64_t)cap.pmp.cfg << 16;
+		csrw_pmpaddr2((uint64_t)cap.pmp.addr);
+	}
+	cap = cnode_get_cap(cnode_get_handle(proc->pid, pmp[3]));
+	if (cap.type == CAPTY_PMP) {
+		pmpcfg |= (uint64_t)cap.pmp.cfg << 24;
+		csrw_pmpaddr3((uint64_t)cap.pmp.addr);
+	}
+	cap = cnode_get_cap(cnode_get_handle(proc->pid, pmp[4]));
+	if (cap.type == CAPTY_PMP) {
+		pmpcfg |= (uint64_t)cap.pmp.cfg << 32;
+		csrw_pmpaddr4((uint64_t)cap.pmp.addr);
+	}
+	cap = cnode_get_cap(cnode_get_handle(proc->pid, pmp[5]));
+	if (cap.type == CAPTY_PMP) {
+		pmpcfg |= (uint64_t)cap.pmp.cfg << 40;
+		csrw_pmpaddr5((uint64_t)cap.pmp.addr);
+	}
+	cap = cnode_get_cap(cnode_get_handle(proc->pid, pmp[6]));
+	if (cap.type == CAPTY_PMP) {
+		pmpcfg |= (uint64_t)cap.pmp.cfg << 48;
+		csrw_pmpaddr6((uint64_t)cap.pmp.addr);
+	}
+	cap = cnode_get_cap(cnode_get_handle(proc->pid, pmp[7]));
+	if (cap.type == CAPTY_PMP) {
+		pmpcfg |= (uint64_t)cap.pmp.cfg << 56;
+		csrw_pmpaddr7((uint64_t)cap.pmp.addr);
+	}
+
 	csrw_pmpcfg0(pmpcfg);
-	csrw_pmpaddr0(pmpaddr[0]);
-	csrw_pmpaddr1(pmpaddr[1]);
-	csrw_pmpaddr2(pmpaddr[2]);
-	csrw_pmpaddr3(pmpaddr[3]);
-	csrw_pmpaddr4(pmpaddr[4]);
-	csrw_pmpaddr5(pmpaddr[5]);
-	csrw_pmpaddr6(pmpaddr[6]);
-	csrw_pmpaddr7(pmpaddr[7]);
 }

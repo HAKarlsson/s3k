@@ -9,13 +9,17 @@ PLATFORM?=plat/virt
 # Prefix for toolchain
 RISCV_PREFIX?=riscv64-unknown-elf-
 
+ARCH=rv64imaczicsr
+ABI=lp64
+CMODEL=medany
 
 ### Compilation configuration
 CC=${RISCV_PREFIX}gcc
+SIZE=${RISCV_PREFIX}size
 OBJDUMP=${RISCV_PREFIX}objdump
 
-INC =-include ${CONFIG_H} -Iinc -I${PLATFORM}
-CFLAGS =-march=rv64imac -mabi=lp64 -mcmodel=medany\
+INC =-include${PLATFORM}/platform.h -include ${CONFIG_H} -Iinc -I${PLATFORM}
+CFLAGS =-march=$(ARCH) -mabi=$(ABI) -mcmodel=$(CMODEL)\
 	-std=c11 \
 	-Wall -Wextra -Werror \
 	-Wno-unused-parameter \
@@ -23,13 +27,14 @@ CFLAGS =-march=rv64imac -mabi=lp64 -mcmodel=medany\
 	-ffunction-sections -fdata-sections\
 	-ffreestanding\
 	-Wno-builtin-declaration-mismatch\
-	-flto -fwhole-program --specs=nosys.specs\
+	-flto -fwhole-program\
+	--specs=nosys.specs\
 	-Wstack-usage=1024 -fstack-usage\
 	-fno-stack-protector \
 	-Os -g3
-ASFLAGS=-march=rv64imac -mabi=lp64 -mcmodel=medany\
+ASFLAGS=-march=$(ARCH) -mabi=$(ABI) -mcmodel=$(CMODEL)\
 	-g3
-LDFLAGS=-march=rv64imac -mabi=lp64 -mcmodel=medany\
+LDFLAGS=-march=$(ARCH) -mabi=$(ABI) -mcmodel=$(CMODEL)\
 	-nostartfiles -ffreestanding\
 	-Wstack-usage=1024 -fstack-usage\
 	-fno-stack-protector \

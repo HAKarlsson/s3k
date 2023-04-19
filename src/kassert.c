@@ -3,12 +3,13 @@
 
 #include "altio.h"
 
-void kassert_failure(const char *file, uint64_t line, const char *expr)
+void kassert_failure(const char *file, unsigned long line, const char *expr)
 {
 	alt_printf("Assertion failed: %s, file %s, line 0x%X\n", expr, file,
 		   line);
 	while (1) {
-	} // halt the system
+		/* halt the core */
+	}
 }
 
 #endif /* NDEBUG */

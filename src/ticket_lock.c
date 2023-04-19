@@ -6,7 +6,7 @@
 void tl_acq(struct ticket_lock *lock)
 {
 	// Increment next ticket number and return the previous value
-	int ticket
+	unsigned long ticket
 	    = __atomic_fetch_add(&lock->next_ticket, 1, __ATOMIC_ACQUIRE);
 
 	// Wait until our ticket number is being served

@@ -19,9 +19,9 @@
 
 struct ticket_lock {
 	/// next ticket number to be issued.
-	int next_ticket;
+	unsigned long next_ticket;
 	/// ticket number currently being served.
-	volatile int serving_ticket;
+	volatile unsigned long serving_ticket;
 };
 
 /**

@@ -7,14 +7,14 @@ vpath %.c src
 vpath %.S src
 
 AS_SRCS=head.S trap.S
-C_SRCS=cap.c cnode.c csr.c exception.c init.c proc.c schedule.c syscall.c \
-       syscall_lock.c syscall_monitor.c  syscall_ipc.c ticket_lock.c \
-       timer.c wfi.c altio.c kassert.c
+C_SRCS=cap.c cnode.c csr.c exception.c proc.c schedule.c \
+       syscall.c syscall_lock.c syscall_monitor.c  syscall_ipc.c \
+       ticket_lock.c timer.c wfi.c altio.c kassert.c
 OBJS=$(patsubst %.S, $(OBJ_DIR)/%.o, ${AS_SRCS}) \
      $(patsubst %.c, $(OBJ_DIR)/%.o, ${C_SRCS})
 DEPS=${OBJS:.o=.d}
 
-all: options kernel dasm
+all: options kernel dasm size
 
 options:
 	@printf "build options:\n"
@@ -29,6 +29,9 @@ options:
 kernel: $(BUILD_DIR)/s3k.elf 
 
 dasm: $(BUILD_DIR)/s3k.da
+
+size: $(BUILD_DIR)/s3k.elf
+	$(SIZE) $<
 
 test:
 	$(MAKE) -C test
