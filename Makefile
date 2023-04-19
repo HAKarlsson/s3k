@@ -59,6 +59,6 @@ $(BUILD_DIR)/s3k.da: $(BUILD_DIR)/s3k.elf
 	@printf "OBJDUMP ${<F} ${@F}\n"
 	@${OBJDUMP} -d $< > $@
 
-.PHONY: all options clean dasm docs test kernel
+.PHONY: all options clean dasm docs test kernel size
 
 -include ${DEPS}
