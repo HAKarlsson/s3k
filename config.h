@@ -18,4 +18,7 @@
 // If debugging, uncomment
 #define NDEBUG
 
+// If instrumenting
+#define INSTRUMENTATION
+
 #endif /* __CONFIG_H__ */

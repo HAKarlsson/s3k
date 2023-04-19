@@ -129,8 +129,9 @@ enum s3k_reg {
 	S3K_REG_EVAL,	///< Exception value.
 	/* PMP registers */
 	S3K_REG_PMP, ///< PMP configuration.
-	/* End of registers */
-	S3K_REG_COUNT ///< *Number of S3K registers.*
+	/* Instrumentation registers */
+	REG_NONPREMPT_START,
+	REG_NONPREMPT_END,
 };
 
 /// @defgroup cap-def S3K Capability Definitions

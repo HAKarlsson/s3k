@@ -5,23 +5,35 @@
 #include "common.h"
 #include "consts.h"
 #include "csr.h"
+#include "kassert.h"
 #include "schedule.h"
+#include "ticket_lock.h"
 #include "timer.h"
 #include "trap.h"
 
-extern struct proc *_listeners[NCHANNEL];
+static struct proc *_listeners[NCHANNEL];
+static struct ticket_lock _lock;
 
-/*** System call handlers ***/
-static void _getreg(struct proc *proc, uint64_t reg)
+static inline void syscall_lock(void)
 {
-	reg %= REG_COUNT;
-	proc->regs[REG_A0] = proc->regs[reg];
+	tl_acq(&_lock);
 }
 
-static void _setreg(struct proc *proc, uint64_t reg, uint64_t val)
+static inline void syscall_unlock(void)
 {
-	reg %= REG_COUNT;
-	proc->regs[reg] = val;
+	tl_rel(&_lock);
+}
+
+/*** System call handlers ***/
+static inline uint64_t _getreg(struct proc *proc, uint64_t reg)
+{
+	return (reg < REG_COUNT) ? proc->regs[reg] : 0;
+}
+
+static inline void _setreg(struct proc *proc, uint64_t reg, uint64_t val)
+{
+	if (reg < REG_COUNT)
+		proc->regs[reg] = val;
 	if (reg == REG_PMP)
 		proc_load_pmp(proc);
 }
@@ -34,7 +46,7 @@ struct proc *syscall_proc(struct proc *proc, uint64_t a1, uint64_t a2,
 		proc->regs[REG_A0] = proc->pid;
 		break;
 	case 1: /* Read register */
-		_getreg(proc, a2);
+		proc->regs[REG_A0] = _getreg(proc, a2);
 		break;
 	case 2: /* Set register */
 		_setreg(proc, a2, a3);
@@ -374,4 +386,383 @@ struct proc *syscall_drvcap(struct proc *proc, uint64_t orig_idx,
 		syscall_unlock();
 	}
 	return proc;
+}
+
+struct proc *syscall_msuspend(struct proc *proc, uint64_t mon_idx, uint64_t pid)
+{
+	cnode_handle_t mon_handle = cnode_get_handle(proc->pid, mon_idx);
+	union cap cap = cnode_get_cap(mon_handle);
+
+	if (!cnode_contains(mon_handle)) {
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		return proc;
+	}
+	if (cap.type != CAPTY_MONITOR) {
+		proc->regs[REG_A0] = EXCPT_UNIMPLEMENTED;
+		return proc;
+	}
+	if (cap.monitor.free > pid || pid >= cap.monitor.end) {
+		proc->regs[REG_A0] = EXCPT_MPID;
+		return proc;
+	}
+
+	struct proc *other_proc = proc_get(pid);
+	syscall_lock();
+	if (!cnode_contains(mon_handle)) {
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		return proc;
+	}
+	proc_suspend(other_proc);
+	syscall_unlock();
+	proc->regs[REG_A0] = EXCPT_NONE;
+	return proc;
+}
+
+struct proc *syscall_mresume(struct proc *proc, uint64_t mon_idx, uint64_t pid)
+{
+	cnode_handle_t mon_handle = cnode_get_handle(proc->pid, mon_idx);
+	union cap cap = cnode_get_cap(mon_handle);
+
+	if (!cnode_contains(mon_handle)) {
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		return proc;
+	}
+	if (cap.type != CAPTY_MONITOR) {
+		proc->regs[REG_A0] = EXCPT_UNIMPLEMENTED;
+		return proc;
+	}
+	if (cap.monitor.free > pid || pid >= cap.monitor.end) {
+		proc->regs[REG_A0] = EXCPT_MPID;
+		return proc;
+	}
+
+	struct proc *other_proc = proc_get(pid);
+	syscall_lock();
+	if (!cnode_contains(mon_handle)) {
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		return proc;
+	}
+	proc_resume(other_proc);
+	syscall_unlock();
+	proc->regs[REG_A0] = EXCPT_NONE;
+	return proc;
+}
+
+struct proc *syscall_mgetreg(struct proc *proc, uint64_t mon_idx, uint64_t pid,
+			     uint64_t reg)
+{
+	cnode_handle_t mon_handle = cnode_get_handle(proc->pid, mon_idx);
+	union cap cap = cnode_get_cap(mon_handle);
+	if (!cnode_contains(mon_handle)) {
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		return proc;
+	}
+	if (cap.type != CAPTY_MONITOR) {
+		proc->regs[REG_A0] = EXCPT_UNIMPLEMENTED;
+		return proc;
+	}
+	if (cap.monitor.free > pid || pid >= cap.monitor.end) {
+		proc->regs[REG_A0] = EXCPT_MPID;
+		return proc;
+	}
+	syscall_lock();
+	if (!cnode_contains(mon_handle)) {
+		syscall_unlock();
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		return proc;
+	}
+
+	struct proc *other_proc = proc_get(pid);
+	if (!proc_acquire(other_proc, PS_SUSPENDED)) {
+		syscall_unlock();
+		proc->regs[REG_A0] = EXCPT_MBUSY;
+		return proc;
+	}
+	proc->regs[REG_A1] = other_proc->regs[reg % REG_COUNT];
+	proc_release(other_proc);
+	__sync_fetch_and_and(&other_proc->state, ~PSF_BUSY);
+	syscall_unlock();
+	proc->regs[REG_A0] = EXCPT_NONE;
+	return proc;
+}
+
+struct proc *syscall_msetreg(struct proc *proc, uint64_t mon_idx, uint64_t pid,
+			     uint64_t reg, uint64_t val)
+{
+	cnode_handle_t mon_handle = cnode_get_handle(proc->pid, mon_idx);
+	union cap cap = cnode_get_cap(mon_handle);
+	if (!cnode_contains(mon_handle)) {
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		return proc;
+	}
+	if (cap.type != CAPTY_MONITOR) {
+		proc->regs[REG_A0] = EXCPT_UNIMPLEMENTED;
+		return proc;
+	}
+	if (cap.monitor.free > pid || pid >= cap.monitor.end) {
+		proc->regs[REG_A0] = EXCPT_MPID;
+		return proc;
+	}
+
+	syscall_lock();
+	if (!cnode_contains(mon_handle)) {
+		syscall_unlock();
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		return proc;
+	}
+	struct proc *other_proc = proc_get(pid);
+	if (!proc_acquire(other_proc, PS_SUSPENDED)) {
+		syscall_unlock();
+		proc->regs[REG_A0] = EXCPT_MBUSY;
+		return proc;
+	}
+	other_proc->regs[reg % REG_COUNT] = val;
+	proc_release(other_proc);
+	syscall_unlock();
+	proc->regs[REG_A0] = EXCPT_NONE;
+	return proc;
+}
+
+struct proc *syscall_mgetcap(struct proc *proc, uint64_t mon_idx, uint64_t pid,
+			     uint64_t node_idx)
+{
+	cnode_handle_t mon_handle = cnode_get_handle(proc->pid, mon_idx);
+	union cap cap = cnode_get_cap(mon_handle);
+	if (!cnode_contains(mon_handle)) {
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		return proc;
+	}
+	if (cap.type != CAPTY_MONITOR) {
+		proc->regs[REG_A0] = EXCPT_UNIMPLEMENTED;
+		return proc;
+	}
+	if (cap.monitor.free > pid || pid >= cap.monitor.end) {
+		proc->regs[REG_A0] = EXCPT_MPID;
+		return proc;
+	}
+	syscall_lock();
+	if (!cnode_contains(mon_handle)) {
+		syscall_unlock();
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		return proc;
+	}
+
+	struct proc *other_proc = proc_get(pid);
+	if (!proc_acquire(other_proc, PS_SUSPENDED)) {
+		syscall_unlock();
+		proc->regs[REG_A0] = EXCPT_MBUSY;
+		return proc;
+	}
+	cnode_handle_t node_handle = cnode_get_handle(pid, node_idx);
+	proc->regs[REG_A1] = cnode_get_cap(node_handle).raw;
+	proc_release(other_proc);
+	syscall_unlock();
+	proc->regs[REG_A0] = EXCPT_NONE;
+	return proc;
+}
+
+struct proc *syscall_mtakecap(struct proc *proc, uint64_t mon_idx, uint64_t pid,
+			      uint64_t src_idx, uint64_t dst_idx)
+{
+	cnode_handle_t mon_handle = cnode_get_handle(proc->pid, mon_idx);
+	union cap cap = cnode_get_cap(mon_handle);
+	if (!cnode_contains(mon_handle)) {
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		return proc;
+	}
+	if (cap.type != CAPTY_MONITOR) {
+		proc->regs[REG_A0] = EXCPT_UNIMPLEMENTED;
+		return proc;
+	}
+	if (cap.monitor.free > pid || pid >= cap.monitor.end) {
+		proc->regs[REG_A0] = EXCPT_MPID;
+		return proc;
+	}
+	syscall_lock();
+	if (!cnode_contains(mon_handle)) {
+		syscall_unlock();
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		return proc;
+	}
+	struct proc *other_proc = proc_get(pid);
+	if (!proc_acquire(other_proc, PS_SUSPENDED)) {
+		syscall_unlock();
+		proc->regs[REG_A0] = EXCPT_MBUSY;
+		return proc;
+	}
+	cnode_handle_t src_handle = cnode_get_handle(pid, src_idx);
+	cnode_handle_t dst_handle = cnode_get_handle(proc->pid, dst_idx);
+	if (cnode_contains(src_handle) && !cnode_contains(dst_handle)) {
+		union cap src_cap = cnode_get_cap(src_handle);
+		cnode_move(src_handle, dst_handle);
+		if (src_cap.type == CAPTY_TIME) {
+			schedule_update(src_cap.time.hartid, proc->pid,
+					src_cap.time.free, src_cap.time.end);
+		}
+		if (src_cap.type == CAPTY_SOCKET && src_cap.socket.tag == 0) {
+			_listeners[src_cap.socket.channel] = proc;
+		}
+	}
+	proc_release(other_proc);
+	syscall_unlock();
+	proc->regs[REG_A0] = EXCPT_NONE;
+	return proc;
+}
+
+struct proc *syscall_mgivecap(struct proc *proc, uint64_t mon_idx, uint64_t pid,
+			      uint64_t src_idx, uint64_t dst_idx)
+{
+	cnode_handle_t mon_handle = cnode_get_handle(proc->pid, mon_idx);
+	union cap cap = cnode_get_cap(mon_handle);
+	if (!cnode_contains(mon_handle)) {
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		return proc;
+	}
+	if (cap.type != CAPTY_MONITOR) {
+		proc->regs[REG_A0] = EXCPT_UNIMPLEMENTED;
+		return proc;
+	}
+	if (cap.monitor.free > pid || pid >= cap.monitor.end) {
+		proc->regs[REG_A0] = EXCPT_MPID;
+		return proc;
+	}
+	syscall_lock();
+	if (!cnode_contains(mon_handle)) {
+		syscall_unlock();
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		return proc;
+	}
+
+	struct proc *other_proc = proc_get(pid);
+	if (!proc_acquire(other_proc, PS_SUSPENDED)) {
+		syscall_unlock();
+		proc->regs[REG_A0] = EXCPT_MBUSY;
+		return proc;
+	}
+
+	cnode_handle_t src_handle = cnode_get_handle(proc->pid, src_idx);
+	cnode_handle_t dst_handle = cnode_get_handle(pid, dst_idx);
+	if (cnode_contains(src_handle) && !cnode_contains(dst_handle)) {
+		union cap src_cap = cnode_get_cap(src_handle);
+		cnode_move(src_handle, dst_handle);
+		if (src_cap.type == CAPTY_TIME) {
+			schedule_update(src_cap.time.hartid, pid,
+					src_cap.time.free, src_cap.time.end);
+		}
+		if (src_cap.type == CAPTY_SOCKET && src_cap.socket.tag == 0) {
+			_listeners[src_cap.socket.channel] = other_proc;
+		}
+	}
+	proc_release(other_proc);
+	syscall_unlock();
+	proc->regs[REG_A0] = EXCPT_NONE;
+	return proc;
+}
+
+struct proc *syscall_recv(struct proc *proc, uint64_t recv_idx,
+			  uint64_t cap_dest)
+{
+	cnode_handle_t recv_cap_handle = cnode_get_handle(proc->pid, recv_idx);
+	union cap recv_cap = cnode_get_cap(recv_cap_handle);
+	if (!cnode_contains(recv_cap_handle)) {
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		return proc;
+	}
+	if (recv_cap.type != CAPTY_SOCKET || recv_cap.socket.tag != 0) {
+		proc->regs[REG_A0] = EXCPT_INVALID_CAP;
+		return proc;
+	}
+	uint64_t channel = recv_cap.socket.channel;
+	syscall_lock();
+	if (!cnode_contains(recv_cap_handle)) {
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		syscall_unlock();
+		return proc;
+	}
+
+	kassert(_listeners[channel] == proc);
+
+	proc->regs[REG_A0] = EXCPT_PREEMPTED;
+	proc->cap_dest = cap_dest;
+	if (proc_ipc_wait(proc, channel)) {
+		// Waiting success
+		syscall_unlock();
+		return schedule_next();
+	} else {
+		// Waiting failed, process is suspended.
+		syscall_unlock();
+		return schedule_yield(proc);
+	}
+}
+
+struct proc *syscall_send(struct proc *proc, uint64_t send_idx, uint64_t msg0,
+			  uint64_t msg1, uint64_t msg2, uint64_t msg3,
+			  uint64_t cap_src, uint64_t yield)
+{
+	cnode_handle_t send_cap_handle = cnode_get_handle(proc->pid, send_idx);
+	union cap send_cap = cnode_get_cap(send_cap_handle);
+	if (!cnode_contains(send_cap_handle)) {
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		return proc;
+	}
+	if (send_cap.type != CAPTY_SOCKET || send_cap.socket.tag == 0) {
+		proc->regs[REG_A0] = EXCPT_INVALID_CAP;
+		return proc;
+	}
+	uint64_t channel = send_cap.socket.channel;
+	struct proc *receiver = _listeners[channel];
+	if (receiver == NULL || !proc_ipc_acquire(receiver, channel)) {
+		proc->regs[REG_A0] = EXCPT_NO_RECEIVER;
+		return proc;
+	}
+
+	syscall_lock();
+	if (!cnode_contains(send_cap_handle)) {
+		proc->regs[REG_A0] = EXCPT_EMPTY;
+		syscall_unlock();
+		return proc;
+	}
+	// Check if we can send a capability.
+	uint64_t cap_dest = receiver->cap_dest;
+	cnode_handle_t dest_handle = cnode_get_handle(receiver->pid, cap_dest);
+	cnode_handle_t src_handle = cnode_get_handle(proc->pid, cap_src);
+	if (cap_src != -1ull) {
+		if (cnode_contains(dest_handle)
+		    || !cnode_contains(src_handle)) {
+			proc->regs[REG_A0] = EXCPT_SEND_CAP;
+			syscall_unlock();
+			return proc;
+		}
+		union cap cap = cnode_get_cap(src_handle);
+		cnode_move(src_handle, dest_handle);
+		if (cap.type == CAPTY_TIME) {
+			schedule_update(cap.time.hartid, receiver->pid,
+					cap.time.free, cap.time.end);
+		}
+		if (cap.type == CAPTY_SOCKET && cap.socket.tag == 0) {
+			_listeners[cap.socket.channel] = receiver;
+		}
+	}
+	receiver->regs[REG_A0] = EXCPT_NONE;
+	receiver->regs[REG_A1] = msg0;
+	receiver->regs[REG_A2] = msg1;
+	receiver->regs[REG_A3] = msg2;
+	receiver->regs[REG_A4] = msg3;
+	receiver->regs[REG_A5] = send_cap.socket.tag;
+	proc_release(receiver);
+	proc->regs[REG_A0] = EXCPT_NONE;
+	syscall_unlock();
+	if (yield)
+		return schedule_yield(proc);
+	return proc;
+}
+
+struct proc *syscall_sendrecv(struct proc *proc, uint64_t sendrecv_idx,
+			      uint64_t msg0, uint64_t msg1, uint64_t msg2,
+			      uint64_t msg3, uint64_t send_cap,
+			      uint64_t dest_cap)
+{
+	syscall_send(proc, sendrecv_idx >> 16, msg0, msg1, msg2, msg3, send_cap,
+		     false);
+	return syscall_recv(proc, sendrecv_idx & 0xFFFF, dest_cap);
 }

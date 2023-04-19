@@ -70,7 +70,7 @@ _wait:
 
 _park:
 	wfi
+	j _park
 
-.data
 .done:	.word 0
 

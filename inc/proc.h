@@ -61,6 +61,14 @@ enum reg {
 	REG_EVAL,   ///< Exception value.
 	/* PMP registers */
 	REG_PMP, ///< PMP configuration.
+
+/* Instrumentation registers */
+#ifdef INSTRUMENTATION
+	REG_NONPREMPT_START,
+	REG_NONPREMPT_END,
+	REG_SCHED_START,
+	REG_SCHED_END,
+#endif
 	/* End of registers */
 	REG_COUNT ///< *Number of S3K registers.*
 };

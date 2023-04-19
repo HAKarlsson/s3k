@@ -54,9 +54,6 @@ enum syscall_nr {
 	SYSCALL_SENDRECV, ///< Send then receive message/capability
 };
 
-void syscall_lock(void);
-void syscall_unlock(void);
-
 // Simple system calls
 /// Process local system call.
 struct proc *syscall_proc(struct proc *proc, uint64_t a0, uint64_t a1,

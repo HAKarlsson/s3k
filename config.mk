@@ -18,7 +18,7 @@ CC=${RISCV_PREFIX}gcc
 SIZE=${RISCV_PREFIX}size
 OBJDUMP=${RISCV_PREFIX}objdump
 
-INC =-include${PLATFORM}/platform.h -include ${CONFIG_H} -Iinc -I${PLATFORM}
+INC =-include ${PLATFORM}/platform.h -include ${CONFIG_H} -Iinc -I${PLATFORM}
 CFLAGS =-march=$(ARCH) -mabi=$(ABI) -mcmodel=$(CMODEL)\
 	-std=c11 \
 	-Wall -Wextra -Werror \
