@@ -4,153 +4,141 @@
 #include "cap.h"
 #include "common.h"
 #include "consts.h"
+#include "excpt.h"
 #include "init_caps.h"
 #include "kassert.h"
+#include "ticket_lock.h"
 
 struct cnode {
-	cnode_handle_t prev, next;
-	union cap cap;
+	uint32_t prev, next;
+	cap_t cap;
 };
 
-static volatile struct cnode _cnodes[NPROC * NCAP + 1];
-
-static void _insert(cnode_handle_t curr, union cap cap, cnode_handle_t prev)
-{
-	cnode_handle_t next = _cnodes[prev].next;
-	_cnodes[curr].prev = prev;
-	_cnodes[curr].next = next;
-	_cnodes[prev].next = curr;
-	_cnodes[next].prev = curr;
-	_cnodes[curr].cap = cap;
-}
-
-static void _delete(cnode_handle_t curr)
-{
-	cnode_handle_t prev = _cnodes[curr].prev;
-	cnode_handle_t next = _cnodes[curr].next;
-	_cnodes[next].prev = prev;
-	_cnodes[prev].next = next;
-
-	_cnodes[curr].cap.raw = 0;
-	_cnodes[curr].prev = 0;
-	_cnodes[curr].next = 0;
-}
-
-static void _move(cnode_handle_t src, cnode_handle_t dst)
-{
-	cnode_handle_t prev = _cnodes[src].prev;
-	union cap cap = _cnodes[src].cap;
-	cnode_handle_t next = _cnodes[src].next;
-
-	// update destination node
-	_cnodes[dst].prev = prev;
-	_cnodes[dst].cap = cap;
-	_cnodes[dst].next = next;
-
-	// update previous and next node
-	_cnodes[prev].next = dst;
-	_cnodes[next].prev = dst;
-
-	_cnodes[src].cap.raw = 0;
-	_cnodes[src].prev = 0;
-	_cnodes[src].next = 0;
-}
-
-static bool _contains(cnode_handle_t curr)
-{
-	return _cnodes[curr].cap.type != 0;
-}
+ticket_lock_t _cnode_lock;
+static struct cnode _cnodes[NPROC * NCAP];
 
 void cnode_init(void)
 {
-	// zero cnodes
-	for (int i = 0; i < NPROC * NCAP; ++i)
-		_cnodes[i] = (struct cnode){ 0 };
+	kassert(ARRAY_SIZE(init_caps) < NCAP);
 
-	// Initialize root node
-	cnode_handle_t root = NPROC * NCAP;
-	_cnodes[root].prev = root;
-	_cnodes[root].next = root;
+	int first = 0, last = 0;
 
-	// Add initial nodes
-	int prev = root;
-	for (cnode_handle_t i = 0; i < ARRAY_SIZE(init_caps); i++) {
-		_insert(i, init_caps[i], prev);
-		prev = i;
+	// Add initial capabilities.
+	for (size_t i = 0; i < ARRAY_SIZE(init_caps); ++i) {
+		_cnodes[last].next = i;
+		_cnodes[first].prev = i;
+		_cnodes[i].prev = last;
+		_cnodes[i].next = first;
+		_cnodes[i].cap = init_caps[i];
+		last = i;
 	}
 }
 
-// Handle is just index to corresponding element in cnodes
-cnode_handle_t cnode_get_handle(cnode_handle_t pid, cnode_handle_t idx)
+cap_t cnode_cap(uint64_t idx)
 {
-	kassert(pid < NPROC);
-	return pid * NCAP + (idx % NCAP);
+	return _cnodes[idx].cap;
 }
 
-cnode_handle_t cnode_get_pid(cnode_handle_t handle)
+uint64_t cnode_next(uint64_t idx)
 {
-	kassert(handle < NPROC * NCAP);
-	return handle / NCAP;
+	return _cnodes[idx].next;
 }
 
-cnode_handle_t cnode_get_next(cnode_handle_t handle)
+uint64_t cnode_prev(uint64_t idx)
 {
-	kassert(handle < NPROC * NCAP);
-	return _cnodes[handle].next;
+	return _cnodes[idx].prev;
 }
 
-union cap cnode_get_cap(cnode_handle_t handle)
+bool cnode_contains(uint64_t idx)
 {
-	kassert(handle < NPROC * NCAP);
-	return _cnodes[handle].cap;
+	return _cnodes[idx].cap.raw != 0;
 }
 
-void cnode_set_cap(cnode_handle_t handle, union cap cap)
+excpt_t cnode_update(uint64_t idx, cap_t cap)
 {
-	kassert(cap.raw != 0);
-	kassert(cnode_contains(handle));
-	_cnodes[handle].cap = cap;
+	excpt_t status;
+	tl_acq(&_cnode_lock);
+	if (!cnode_contains(idx)) {
+		status = EXCPT_EMPTY;
+	} else {
+		status = EXCPT_NONE;
+		_cnodes[idx].cap = cap;
+	}
+	tl_rel(&_cnode_lock);
+	return status;
 }
 
-bool cnode_contains(cnode_handle_t handle)
+excpt_t cnode_insert(uint64_t idx_new, cap_t cap_new, uint64_t idx_prev)
 {
-	kassert(handle < NPROC * NCAP);
-	return _contains(handle);
+	excpt_t status;
+	tl_acq(&_cnode_lock);
+	if (cnode_contains(idx_new)) {
+		status = EXCPT_COLLISION;
+	} else if (!cnode_contains(idx_prev)) {
+		status = EXCPT_EMPTY;
+	} else {
+		status = EXCPT_NONE;
+		_cnodes[_cnodes[idx_prev].next].prev = idx_new;
+		_cnodes[idx_new].next = _cnodes[idx_prev].next;
+		_cnodes[idx_new].prev = idx_prev;
+		_cnodes[idx_new].cap = cap_new;
+		_cnodes[idx_prev].next = idx_new;
+	}
+	tl_rel(&_cnode_lock);
+	return status;
 }
 
-void cnode_insert(cnode_handle_t curr, union cap cap, cnode_handle_t prev)
+excpt_t cnode_move(uint64_t idx_src, uint64_t idx_dst)
 {
-	kassert(curr < NPROC * NCAP);
-	kassert(prev < NPROC * NCAP);
-	kassert(cap.raw != 0);
-	kassert(!_contains(curr));
-	kassert(_contains(prev));
-
-	_insert(curr, cap, prev);
+	excpt_t status;
+	tl_acq(&_cnode_lock);
+	if (cnode_contains(idx_dst)) {
+		status = EXCPT_COLLISION;
+	} else if (!cnode_contains(idx_src)) {
+		status = EXCPT_EMPTY;
+	} else {
+		status = EXCPT_NONE;
+		_cnodes[idx_dst].cap = _cnodes[idx_src].cap;
+		_cnodes[idx_dst].next = _cnodes[idx_src].next;
+		_cnodes[idx_dst].prev = _cnodes[idx_src].prev;
+		_cnodes[_cnodes[idx_dst].prev].next = idx_dst;
+		_cnodes[_cnodes[idx_dst].next].prev = idx_dst;
+		_cnodes[idx_src].cap.raw = 0;
+	}
+	tl_rel(&_cnode_lock);
+	return status;
 }
 
-void cnode_move(cnode_handle_t src, cnode_handle_t dst)
+excpt_t cnode_delete(uint64_t idx)
 {
-	kassert(src < NPROC * NCAP);
-	kassert(dst < NPROC * NCAP);
-	kassert(_contains(src));
-	kassert(!_contains(dst));
-	_move(src, dst);
+	excpt_t status;
+	tl_acq(&_cnode_lock);
+	if (!cnode_contains(idx)) {
+		status = EXCPT_EMPTY;
+	} else {
+		status = EXCPT_NONE;
+		_cnodes[_cnodes[idx].next].prev = _cnodes[idx].prev;
+		_cnodes[_cnodes[idx].prev].next = _cnodes[idx].next;
+		_cnodes[idx].cap.raw = 0;
+	}
+	tl_rel(&_cnode_lock);
+	return status;
 }
 
-void cnode_delete(cnode_handle_t curr)
+excpt_t cnode_delete_if(uint64_t idx, uint64_t idx_prev)
 {
-	kassert(curr < NPROC * NCAP);
-	kassert(_contains(curr));
-
-	_delete(curr);
-}
-
-bool cnode_delete_if(cnode_handle_t curr, cnode_handle_t prev)
-{
-	kassert(curr < NPROC * NCAP);
-	if (!_contains(curr) || _cnodes[curr].prev != prev)
-		return false;
-	_delete(curr);
-	return true;
+	excpt_t status;
+	tl_acq(&_cnode_lock);
+	if (!cnode_contains(idx)) {
+		status = EXCPT_EMPTY;
+	} else if (cnode_prev(idx) != idx_prev) {
+		status = EXCPT_UNSPECIFIED;
+	} else {
+		status = EXCPT_NONE;
+		_cnodes[_cnodes[idx].next].prev = _cnodes[idx].prev;
+		_cnodes[_cnodes[idx].prev].next = _cnodes[idx].next;
+		_cnodes[idx].cap.raw = 0;
+	}
+	tl_rel(&_cnode_lock);
+	return status;
 }

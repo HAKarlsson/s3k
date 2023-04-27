@@ -2,7 +2,7 @@
  * @file proc.h
  * @brief Defines the process control block and its associated functions.
  *
- * This file contains the definition of the `struct proc` data structure, which
+ * This file contains the definition of the `proc_t` data structure, which
  * represents a process control block (PCB) in the operating system. It also
  * contains the declarations of functions for manipulating the PCB.
  *
@@ -78,7 +78,7 @@ enum reg {
  *
  * Contains all information needed manage a process except the capabilities.
  */
-struct proc {
+typedef struct {
 	/** The registers of the process (RISC-V registers and virtual
 	 * registers). */
 	uint64_t regs[REG_COUNT];
@@ -90,7 +90,7 @@ struct proc {
 	uint64_t sleep;
 	/** Capability destination for receive calls */
 	uint64_t cap_dest;
-};
+} proc_t;
 
 /**
  * Initializes all processes in the system.
@@ -107,7 +107,7 @@ void proc_init(void);
  * @param pid The process ID to look for.
  * @return A pointer to the process corresponding to the given PID.
  */
-struct proc *proc_get(uint64_t pid);
+proc_t *proc_get(uint64_t pid);
 
 /**
  * @brief Attempt to acquire the lock for a process.
@@ -121,7 +121,7 @@ struct proc *proc_get(uint64_t pid);
  * @param expected The expected value of the process's state.
  * @return True if the lock was successfully acquired, false otherwise.
  */
-bool proc_acquire(struct proc *proc, uint64_t expected);
+bool proc_acquire(proc_t *proc, uint64_t expected);
 
 /**
  * @brief Release the lock on a process.
@@ -131,7 +131,7 @@ bool proc_acquire(struct proc *proc, uint64_t expected);
  *
  * @param proc Pointer to the process to release the lock for.
  */
-void proc_release(struct proc *proc);
+void proc_release(proc_t *proc);
 
 /**
  * Set the process to a suspended state without locking it. The process may
@@ -139,21 +139,21 @@ void proc_release(struct proc *proc);
  *
  * @param proc Pointer to process to suspend.
  */
-void proc_suspend(struct proc *proc);
+void proc_suspend(proc_t *proc);
 
 /**
  * Resumes a process from its suspend state without locking it.
  *
  * @param proc Pointer to process to be resumed.
  */
-void proc_resume(struct proc *proc);
+void proc_resume(proc_t *proc);
 
 /**
  * The process is set to wait on a channel atomically if it is not ordered to
  * suspend. After begin set to wait, schedule_next() should be called. If
  * ordered to suspend, schedule_yield() should be called.
  */
-bool proc_ipc_wait(struct proc *proc, uint64_t channel_id);
+bool proc_ipc_wait(proc_t *proc, uint64_t channel_id);
 
 /**
  * The process is waiting for an IPC send, the channel it is waiting on is
@@ -161,7 +161,7 @@ bool proc_ipc_wait(struct proc *proc, uint64_t channel_id);
  * if its state is waiting on the provided channel id. The processes is
  * released with proc_ipc_release().
  */
-bool proc_ipc_acquire(struct proc *proc, uint64_t channel_id);
+bool proc_ipc_acquire(proc_t *proc, uint64_t channel_id);
 
 /**
  * @brief Loads the PMP settings of the process to the hardware.
@@ -173,6 +173,6 @@ bool proc_ipc_acquire(struct proc *proc, uint64_t channel_id);
  *
  * @param proc Pointer to the process for which we load PMP settings.
  */
-void proc_load_pmp(const struct proc *proc);
+void proc_load_pmp(const proc_t *proc);
 
 #endif /* __PROC_H__ */

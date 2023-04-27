@@ -97,12 +97,10 @@ trap_entry:
 	sd t5, (T5_OFFSET)(tp)
 	sd t6, (T6_OFFSET)(tp)
 
-	# load user pc and tp
-	csrr  t0, mepc
-	csrrw t1, mscratch, zero
-
 	# save user pc and tp
-	sd    t0, (PC_OFFSET)(tp)
+	csrr  t1, mepc
+	sd    t1, (PC_OFFSET)(tp)
+	csrrw t1, mscratch, zero
 	sd    t1, (TP_OFFSET)(tp)
 
 	# Do not touch a0-a8, and t0 as they are used in syscall!
@@ -130,9 +128,9 @@ trap_entry:
 # Aftwerwards we go to trap exit.
 .exception:
 	# Save a0 (pcb pointer) so we know the process in context
-	csrr a1, mcause
-	csrr a2, mepc
-	csrr a3, mtval
+	csrr a0, mcause
+	csrr a1, mepc
+	csrr a2, mtval
 	la ra, handle_exception
 	j .call
 
@@ -169,24 +167,22 @@ trap_entry:
 # syscall number is in register a0. After the syscall has been handled,
 # we go to trap_exit.
 .syscall:
-	# Check syscall number.
-	li  t1, SYSCALL_COUNT
-	bge a0, t1, .exception
+	li t1,10
+	bgeu t0,t1,.exception
 
-	# increment PC
-	addi t0, t0, 4
-	sd   t0, (PC_OFFSET)(tp)
+	csrr t1,mepc
+	addi t1,t1,4
+	sd t1,(PC_OFFSET)(tp)
 
-	# Compute address of desired system call function in jump table
-	la ra, .syscall_table
-	slli a0, a0, 2                # multiply index by 4 to get offset
-	add ra, ra, a0                # add offset to jump table address
+1:	auipc ra,%pcrel_hi(_syscall_handlers)
+	slli t0,t0,2
+	add ra,ra,t0
+	addi ra,ra,%pcrel_lo(1b)
 
 	# fallthrough to .call
 
 # Sets the pointer to PCB at a0 (first argument) then call function at ra
 .call:
-	mv a0,tp
 	jalr ra,0(ra)
 
 	# fallthrough to trap_exit
@@ -196,11 +192,9 @@ trap_entry:
 .globl trap_exit
 .type trap_exit, @function
 trap_exit:
-	# Set TP to PCB, in case of interrupt, TP is preserved.
-	mv tp,a0
 	# Enable preemption by setting the machine interrupt enable bit
 	# in mstatus
-	csrw mstatus, MSTATUS_MIE
+	csrs mstatus, MSTATUS_MIE
 
 	# Load user pc to mepc.
 	ld t0, (PC_OFFSET)(tp)
@@ -239,36 +233,26 @@ trap_exit:
 	ld t6, (T6_OFFSET)(tp)
 
 	# Disable preemption
-	csrw mstatus,0
+	csrc mstatus,MSTATUS_MIE
 	# Save the PCB pointer to mscratch.
 	csrw mscratch, tp
 	# Load the user thread pointer.
 	ld   tp,(TP_OFFSET)(tp) # load user tp
 	# Return to the user.
-.trap_exit_ret:
 	mret
 
-# Table of jump instructions for system call functions. Aligned on 4-byte
-# boundary. The 'norvc' option disables compressed encoding, ensuring each 
-# instruction is exactly 4 bytes wide.
-.balign 4
-.syscall_table:
-	.option push
-	.option norvc
-	j       syscall_proc
-	j       syscall_getcap
-	j       syscall_movcap
-	j       syscall_delcap
-	j       syscall_revcap
-	j       syscall_drvcap
-	j       syscall_msuspend
-	j       syscall_mresume
-	j       syscall_mgetreg
-	j       syscall_msetreg
-	j       syscall_mgetcap
-	j       syscall_mtakecap
-	j       syscall_mgivecap
-	j       syscall_recv
-	j       syscall_send
-	j       syscall_sendrecv
-	.option pop
+
+.option push
+.option norvc
+_syscall_handlers:
+	j syscall_getinfo
+	j syscall_getreg
+	j syscall_setreg
+	j syscall_yield
+	j syscall_getcap
+	j syscall_movcap
+	j syscall_delcap
+	j syscall_revcap
+	j syscall_drvcap
+	j syscall_invcap
+.option pop

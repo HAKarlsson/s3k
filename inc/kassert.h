@@ -6,7 +6,9 @@
  * This header provides support for assertions in the kernel. When the NDEBUG
  * symbol is not defined, the `kassert()` macro can be used to check whether a
  * condition is true. If the condition is false, the `kassert_failure()`
- * function will be called to report the failure.
+ * function will be called to report the failure. If NDEBUG is defined, then
+ * if the condition is false, we get a __builtin_unreachable, hinting to the 
+ * compiler that the condition is assumed to be true.
  *
  * @copyright MIT License
  * @author Henrik Karlsson (henrik10@kth.se)
@@ -16,7 +18,12 @@
 
 #ifdef NDEBUG
 
-#define kassert(expr) ((void)0)
+#define kassert(expr)                            \
+	do {                                     \
+		if (!(expr)) {                   \
+			__builtin_unreachable(); \
+		}                                \
+	} while (false)
 
 #else /* NDEBUG */
 

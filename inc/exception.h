@@ -21,13 +21,10 @@
  * handle_ret() function. Otherwise, it calls the handle_default() function
  * to handle the exception.
  *
- * @param proc  Pointer to the process that encountered the exception
  * @param mcause  The value of the mcause register
  * @param mepc  The value of the mepc register
  * @param mtval  The value of the mtval register
- * @param Returns proc.
  */
-struct proc *handle_exception(struct proc *proc, uint64_t mcause, uint64_t mepc,
-			      uint64_t mtval);
+void handle_exception(uint64_t mcause, uint64_t mepc, uint64_t mtval);
 
 #endif /* __EXCEPTION_H__ */

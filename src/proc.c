@@ -5,7 +5,7 @@
 #include "csr.h"
 #include "kassert.h"
 
-static struct proc _processes[NPROC];
+static proc_t _processes[NPROC];
 extern unsigned char _payload[];
 
 void proc_init(void)
@@ -18,13 +18,13 @@ void proc_init(void)
 	_processes[0].regs[REG_PC] = (uint64_t)_payload;
 }
 
-struct proc *proc_get(uint64_t pid)
+proc_t *proc_get(uint64_t pid)
 {
 	kassert(pid < NPROC);
 	return &_processes[pid];
 }
 
-bool proc_acquire(struct proc *proc, uint64_t expected)
+bool proc_acquire(proc_t *proc, uint64_t expected)
 {
 	kassert(!(expected & PSF_BUSY));
 	// Set the busy flag if expected state
@@ -35,13 +35,13 @@ bool proc_acquire(struct proc *proc, uint64_t expected)
 					   __ATOMIC_RELAXED /* fail */);
 }
 
-void proc_release(struct proc *proc)
+void proc_release(proc_t *proc)
 {
 	// Unset all flags except suspend flag.
 	__atomic_fetch_and(&proc->state, PSF_SUSPEND, __ATOMIC_RELEASE);
 }
 
-void proc_suspend(struct proc *proc)
+void proc_suspend(proc_t *proc)
 {
 	// Set the suspend flag
 	uint64_t prev_state
@@ -54,13 +54,13 @@ void proc_suspend(struct proc *proc)
 	}
 }
 
-void proc_resume(struct proc *proc)
+void proc_resume(proc_t *proc)
 {
 	// Unset the suspend flag
 	__atomic_fetch_and(&proc->state, ~PSF_SUSPEND, __ATOMIC_RELEASE);
 }
 
-bool proc_ipc_wait(struct proc *proc, uint64_t channel_id)
+bool proc_ipc_wait(proc_t *proc, uint64_t channel_id)
 {
 	// We expect that the process is running as usual.
 	uint64_t expected = PSF_BUSY;
@@ -73,7 +73,7 @@ bool proc_ipc_wait(struct proc *proc, uint64_t channel_id)
 					   __ATOMIC_RELAXED /* fail */);
 }
 
-bool proc_ipc_acquire(struct proc *proc, uint64_t channel_id)
+bool proc_ipc_acquire(proc_t *proc, uint64_t channel_id)
 {
 	// We expect that the process is waiting on channel_id.
 	// Channel ID is set to the most significant bytes.
@@ -81,48 +81,48 @@ bool proc_ipc_acquire(struct proc *proc, uint64_t channel_id)
 	return proc_acquire(proc, expected);
 }
 
-void proc_load_pmp(const struct proc *proc)
+void proc_load_pmp(const proc_t *proc)
 {
 	uint8_t *pmp = (uint8_t *)&proc->regs[REG_PMP];
 	uint64_t pmpcfg = 0;
-	union cap cap;
+	cap_t cap;
 
-	cap = cnode_get_cap(cnode_get_handle(proc->pid, pmp[0]));
+	cap = cnode_cap(cnode_idx(proc->pid, pmp[0]));
 	if (cap.type == CAPTY_PMP) {
 		pmpcfg |= (uint64_t)cap.pmp.cfg;
 		csrw_pmpaddr0((uint64_t)cap.pmp.addr);
 	}
-	cap = cnode_get_cap(cnode_get_handle(proc->pid, pmp[1]));
+	cap = cnode_cap(cnode_idx(proc->pid, pmp[1]));
 	if (cap.type == CAPTY_PMP) {
 		pmpcfg |= (uint64_t)cap.pmp.cfg << 8;
 		csrw_pmpaddr1((uint64_t)cap.pmp.addr);
 	}
-	cap = cnode_get_cap(cnode_get_handle(proc->pid, pmp[2]));
+	cap = cnode_cap(cnode_idx(proc->pid, pmp[2]));
 	if (cap.type == CAPTY_PMP) {
 		pmpcfg |= (uint64_t)cap.pmp.cfg << 16;
 		csrw_pmpaddr2((uint64_t)cap.pmp.addr);
 	}
-	cap = cnode_get_cap(cnode_get_handle(proc->pid, pmp[3]));
+	cap = cnode_cap(cnode_idx(proc->pid, pmp[3]));
 	if (cap.type == CAPTY_PMP) {
 		pmpcfg |= (uint64_t)cap.pmp.cfg << 24;
 		csrw_pmpaddr3((uint64_t)cap.pmp.addr);
 	}
-	cap = cnode_get_cap(cnode_get_handle(proc->pid, pmp[4]));
+	cap = cnode_cap(cnode_idx(proc->pid, pmp[4]));
 	if (cap.type == CAPTY_PMP) {
 		pmpcfg |= (uint64_t)cap.pmp.cfg << 32;
 		csrw_pmpaddr4((uint64_t)cap.pmp.addr);
 	}
-	cap = cnode_get_cap(cnode_get_handle(proc->pid, pmp[5]));
+	cap = cnode_cap(cnode_idx(proc->pid, pmp[5]));
 	if (cap.type == CAPTY_PMP) {
 		pmpcfg |= (uint64_t)cap.pmp.cfg << 40;
 		csrw_pmpaddr5((uint64_t)cap.pmp.addr);
 	}
-	cap = cnode_get_cap(cnode_get_handle(proc->pid, pmp[6]));
+	cap = cnode_cap(cnode_idx(proc->pid, pmp[6]));
 	if (cap.type == CAPTY_PMP) {
 		pmpcfg |= (uint64_t)cap.pmp.cfg << 48;
 		csrw_pmpaddr6((uint64_t)cap.pmp.addr);
 	}
-	cap = cnode_get_cap(cnode_get_handle(proc->pid, pmp[7]));
+	cap = cnode_cap(cnode_idx(proc->pid, pmp[7]));
 	if (cap.type == CAPTY_PMP) {
 		pmpcfg |= (uint64_t)cap.pmp.cfg << 56;
 		csrw_pmpaddr7((uint64_t)cap.pmp.addr);

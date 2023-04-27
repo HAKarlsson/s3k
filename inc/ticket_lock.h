@@ -12,30 +12,45 @@
  * @copyright MIT License
  * @author Henrik Karlsson (henrik10@kth.se)
  */
-#ifndef __LOCK_H__
-#define __LOCK_H__
+#ifndef __TICKET_LOCK_H__
+#define __TICKET_LOCK_H__
 
 #include <stdint.h>
 
-struct ticket_lock {
+typedef struct {
 	/// next ticket number to be issued.
 	unsigned long next_ticket;
 	/// ticket number currently being served.
-	volatile unsigned long serving_ticket;
-};
+	unsigned long serving_ticket;
+} ticket_lock_t;
 
 /**
  * Acquire a ticket lock.
  *
  * @param lock Pointer to the ticket lock to acquire.
  */
-void tl_acq(struct ticket_lock *lock);
+static inline void tl_acq(ticket_lock_t *lock)
+{
+	// Increment next ticket number and return the previous value
+	unsigned long ticket
+	    = __atomic_fetch_add(&lock->next_ticket, 1, __ATOMIC_RELAXED);
+
+	// Wait until our ticket number is being served
+	while (__atomic_load_n(&lock->serving_ticket, __ATOMIC_ACQUIRE)
+	       != ticket) {
+		// Wait until our ticket number is being served
+	}
+}
 
 /**
  * Release a ticket lock.
  *
  * @param lock Pointer to the ticket lock to release.
  */
-void tl_rel(struct ticket_lock *lock);
+static inline void tl_rel(ticket_lock_t *lock)
+{
+	// Atomically increment the serving ticket number
+	__atomic_fetch_add(&lock->serving_ticket, 1, __ATOMIC_RELEASE);
+}
 
-#endif /* __LOCK_H__ */
+#endif /* __TICKET_LOCK_H__ */

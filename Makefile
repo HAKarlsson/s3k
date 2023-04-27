@@ -1,17 +1,66 @@
 # See LICENSE file for copyright and license details.
 .POSIX:
 
-include config.mk
+# Program name
+PROGRAM?=s3k
 
+# Kernel configuration
+CONFIG_H?=config.h
+
+# Platform
+PLATFORM?=plat/virt
+
+# Build directory
+BUILD?=build
+
+# Prefix for toolchain
+RISCV_PREFIX?=riscv64-unknown-elf-
+
+### Tools
+CC=${RISCV_PREFIX}gcc
+SIZE=${RISCV_PREFIX}size
+OBJDUMP=${RISCV_PREFIX}objdump
+
+# Compilation flags
+ARCH=rv64imaczicsr
+ABI=lp64
+CMODEL=medany
+
+INC =-include ${PLATFORM}/platform.h -include ${CONFIG_H} -Iinc -I${PLATFORM}
+CFLAGS =-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL} \
+	-std=c11 \
+	-Wall -Wextra -Werror \
+	-Wno-unused-parameter \
+	-Wshadow -fno-common \
+	-ffunction-sections -fdata-sections \
+	-ffreestanding \
+	-Wno-builtin-declaration-mismatch \
+	-flto -fwhole-program \
+	--specs=nosys.specs \
+	-Wstack-usage=1024 -fstack-usage \
+	-fno-stack-protector \
+	-Os -g3
+ASFLAGS=-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL} \
+	-g3
+LDFLAGS=-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL} \
+	-nostartfiles -ffreestanding \
+	-Wstack-usage=1024 -fstack-usage \
+	-fno-stack-protector \
+	-Wl,--gc-sections \
+	-flto \
+	-T${PLATFORM}/linker.ld
+
+# Sources
 vpath %.c src
 vpath %.S src
 
-AS_SRCS=head.S trap.S
-C_SRCS=cap.c cnode.c csr.c exception.c proc.c schedule.c \
-       syscall.c timer.c ticket_lock.c wfi.c altio.c kassert.c
-OBJS=$(patsubst %.S, $(OBJ_DIR)/%.o, ${AS_SRCS}) \
-     $(patsubst %.c, $(OBJ_DIR)/%.o, ${C_SRCS})
+SRCS=head.S trap.S cap.c cnode.c csr.c current.c exception.c proc.c \
+     schedule.c syscall.c timer.c wfi.c altio.c kassert.c
+OBJS=${patsubst %.S, ${BUILD}/%.o, ${patsubst %.c, ${BUILD}/%.o, ${SRCS}}}
 DEPS=${OBJS:.o=.d}
+
+ELF=${BUILD}/${PROGRAM}.elf
+DA=${BUILD}/${PROGRAM}.da
 
 all: options kernel dasm size
 
@@ -23,40 +72,38 @@ options:
 	@printf "CFLAGS    = ${CFLAGS}\n"
 	@printf "INC       = ${INC}\n"
 	@printf "CONFIG_H  = ${abspath ${CONFIG_H}}\n"
-	@printf "BUILD_DIR = ${abspath ${BUILD_DIR}}\n"
+	@printf "BUILD     = ${abspath ${BUILD}}\n"
 
-kernel: $(BUILD_DIR)/s3k.elf 
+kernel: ${ELF}
 
-dasm: $(BUILD_DIR)/s3k.da
+dasm: ${DA}
 
-size: $(BUILD_DIR)/s3k.elf
-	$(SIZE) $<
-
-test:
-	$(MAKE) -C test
+size: ${ELF}
+	${SIZE} $<
 
 format:
-	clang-format -i $(shell find -wholename "*.[chC]" -not -path '*/.*')
+	clang-format -i ${shell find -wholename "*.[chC]" -not -path '*/.*'}
 
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf ${BUILD}
 
-$(OBJ_DIR)/%.o: %.S
-	@mkdir -p ${@D}
+${BUILD}:
+	mkdir -p $@
+
+${BUILD}/%.o: %.S | ${BUILD}
 	@printf "CC ${@F}\n"
 	@${CC} ${ASFLAGS} ${INC} -MMD -c -o $@ $<
 
-$(OBJ_DIR)/%.o: %.c
-	@mkdir -p ${@D}
+${BUILD}/%.o: %.c | ${BUILD}
 	@printf "CC ${@F}\n"
 	@${CC} ${CFLAGS} ${INC} -MMD -c -o $@ $<
 
-$(BUILD_DIR)/s3k.elf: ${OBJS}
+${BUILD}/%.elf: ${OBJS}
 	@printf "CC ${@F}\n"
 	@${CC} ${LDFLAGS} -o $@ $^
 
-$(BUILD_DIR)/s3k.da: $(BUILD_DIR)/s3k.elf
-	@printf "OBJDUMP ${<F} ${@F}\n"
+${BUILD}/%.da: ${BUILD}/%.elf
+	@printf "OBJDUMP ${@F}\n"
 	@${OBJDUMP} -d $< > $@
 
 .PHONY: all options clean dasm docs test kernel size

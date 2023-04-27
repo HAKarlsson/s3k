@@ -1,6 +1,6 @@
 #include "cap.h"
 
-static const union cap init_caps[]
+static const cap_t init_caps[]
     = { [0] = CAP_PMP(0x20005fff, CAP_RWX),
 	[1] = CAP_MEMORY(0x0020, 0x8000, 0x10, CAP_RWX),
 	[2] = CAP_MEMORY(0x0000, 0x0001, 0x2, CAP_RW),

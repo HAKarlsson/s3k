@@ -4,6 +4,7 @@
 
 #include "consts.h"
 #include "csr.h"
+#include "current.h"
 #include "platform.h"
 #include "proc.h"
 #include "timer.h"
@@ -32,11 +33,11 @@ void schedule_delete(uint64_t hartid, uint64_t begin, uint64_t end)
 	schedule_update(hartid, NONE_PID, begin, end);
 }
 
-struct proc *schedule_next()
+void schedule_next()
 {
 	uint64_t hartid;
 	uint64_t quantum, start_time, end_time;
-	struct proc *proc;
+	proc_t *proc;
 	struct sched_entry entry;
 
 	// Get the hart ID.
@@ -86,16 +87,16 @@ retry:
 
 	// Set timeout
 	timeout_set(hartid, end_time);
-
-	return proc;
+	current_set(proc);
+	trap_exit();
 }
 
-struct proc *schedule_yield(struct proc *proc)
+void schedule_yield(void)
 {
 	// Release currently held process.
-	proc_release(proc);
+	proc_release(current_get());
 	// Schedule the next process.
-	return schedule_next();
+	schedule_next();
 }
 
 void schedule_init(void)

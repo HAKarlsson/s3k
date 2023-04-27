@@ -15,7 +15,7 @@ uint64_t pmp_napot_end(uint64_t addr)
 	return (((addr + 1) | addr) + 1) << 2;
 }
 
-bool cap_time_parent(union cap parent, union cap child)
+bool cap_time_parent(cap_t parent, cap_t child)
 {
 	return parent.type == CAPTY_TIME && child.type == CAPTY_TIME
 	       && parent.time.begin <= child.time.begin
@@ -23,7 +23,7 @@ bool cap_time_parent(union cap parent, union cap child)
 	       && child.time.hartid == parent.time.hartid;
 }
 
-bool cap_memory_parent(union cap parent, union cap child)
+bool cap_memory_parent(cap_t parent, cap_t child)
 {
 	if (parent.type == CAPTY_MEMORY && child.type == CAPTY_MEMORY) {
 		return parent.memory.offset == child.memory.offset
@@ -44,14 +44,14 @@ bool cap_memory_parent(union cap parent, union cap child)
 	return false;
 }
 
-bool cap_monitor_parent(union cap parent, union cap child)
+bool cap_monitor_parent(cap_t parent, cap_t child)
 {
 	return parent.type == CAPTY_MONITOR && child.type == CAPTY_MONITOR
 	       && parent.monitor.begin <= child.monitor.begin
 	       && child.monitor.end <= parent.monitor.end;
 }
 
-bool cap_channel_parent(union cap parent, union cap child)
+bool cap_channel_parent(cap_t parent, cap_t child)
 {
 	if (parent.type == CAPTY_CHANNEL && child.type == CAPTY_CHANNEL)
 		return parent.channel.begin <= child.channel.begin
@@ -62,14 +62,14 @@ bool cap_channel_parent(union cap parent, union cap child)
 	return false;
 }
 
-bool cap_socket_parent(union cap parent, union cap child)
+bool cap_socket_parent(cap_t parent, cap_t child)
 {
 	return parent.type == CAPTY_SOCKET && child.type == CAPTY_SOCKET
 	       && parent.socket.tag == 0
 	       && parent.socket.channel == child.socket.channel;
 }
 
-bool cap_time_derive(union cap parent, union cap child)
+bool cap_time_derive(cap_t parent, cap_t child)
 {
 	return parent.type == CAPTY_TIME && child.type == CAPTY_TIME
 	       && parent.time.free == child.time.begin
@@ -78,7 +78,7 @@ bool cap_time_derive(union cap parent, union cap child)
 	       && child.time.hartid == parent.time.hartid;
 }
 
-bool cap_memory_derive(union cap parent, union cap child)
+bool cap_memory_derive(cap_t parent, cap_t child)
 {
 	if (parent.type == CAPTY_MEMORY && child.type == CAPTY_MEMORY) {
 		return parent.memory.offset == child.memory.offset
@@ -104,7 +104,7 @@ bool cap_memory_derive(union cap parent, union cap child)
 	return false;
 }
 
-bool cap_monitor_derive(union cap parent, union cap child)
+bool cap_monitor_derive(cap_t parent, cap_t child)
 {
 	return parent.type == CAPTY_MONITOR && child.type == CAPTY_MONITOR
 	       && parent.monitor.free == child.monitor.begin
@@ -112,7 +112,7 @@ bool cap_monitor_derive(union cap parent, union cap child)
 	       && child.monitor.end <= parent.monitor.end;
 }
 
-bool cap_channel_derive(union cap parent, union cap child)
+bool cap_channel_derive(cap_t parent, cap_t child)
 {
 	if (parent.type == CAPTY_CHANNEL && child.type == CAPTY_CHANNEL)
 		return parent.channel.free == child.channel.begin
@@ -124,7 +124,7 @@ bool cap_channel_derive(union cap parent, union cap child)
 	return false;
 }
 
-bool cap_socket_derive(union cap parent, union cap child)
+bool cap_socket_derive(cap_t parent, cap_t child)
 {
 	return parent.type == CAPTY_SOCKET && child.type == CAPTY_SOCKET
 	       && parent.socket.tag == 0 && child.socket.tag > 0

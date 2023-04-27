@@ -1,6 +1,7 @@
 /* See LICENSE file for copyright and license details. */
 #include "exception.h"
 
+#include "current.h"
 #include "proc.h"
 #include "trap.h"
 
@@ -15,8 +16,9 @@
  * prior to the exception, and clears the exception cause and exception value
  * registers.
  */
-static void handle_ret(struct proc *proc)
+static void handle_ret(void)
 {
+	proc_t *proc = current_get();
 	proc->regs[REG_PC] = proc->regs[REG_EPC];
 	proc->regs[REG_SP] = proc->regs[REG_ESP];
 	proc->regs[REG_ECAUSE] = 0;
@@ -32,9 +34,9 @@ static void handle_ret(struct proc *proc)
  * pointer in the process's registers, and switches to the trap handler program
  * counter and stack pointer.
  */
-static void handle_default(struct proc *proc, uint64_t mcause, uint64_t mepc,
-			   uint64_t mtval)
+static void handle_default(uint64_t mcause, uint64_t mepc, uint64_t mtval)
 {
+	proc_t *proc = current_get();
 	proc->regs[REG_ECAUSE] = mcause;
 	proc->regs[REG_EVAL] = mtval;
 	proc->regs[REG_EPC] = proc->regs[REG_PC];
@@ -43,17 +45,15 @@ static void handle_default(struct proc *proc, uint64_t mcause, uint64_t mepc,
 	proc->regs[REG_SP] = proc->regs[REG_TSP];
 }
 
-struct proc *handle_exception(struct proc *proc, uint64_t mcause, uint64_t mepc,
-			      uint64_t mtval)
+void handle_exception(uint64_t mcause, uint64_t mepc, uint64_t mtval)
 {
 	/* Check if it is a return from exception */
 	if (mcause == ILLEGAL_INSTRUCTION
 	    && (mtval == MRET || mtval == SRET || mtval == URET)) {
 		// Handle return from exception
-		handle_ret(proc);
+		handle_ret();
 	} else {
 		// Handle default exception
-		handle_default(proc, mcause, mepc, mtval);
+		handle_default(mcause, mepc, mtval);
 	}
-	return proc;
 }

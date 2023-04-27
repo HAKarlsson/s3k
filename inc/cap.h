@@ -80,7 +80,7 @@
 		       .tag = _tag }         \
 	}
 
-enum capty {
+typedef enum {
 	CAPTY_NONE,    ///< No capability
 	CAPTY_TIME,    ///< Time Slice capability
 	CAPTY_MEMORY,  ///< Memory Slice capability
@@ -88,10 +88,10 @@ enum capty {
 	CAPTY_MONITOR, ///< Monitor capability
 	CAPTY_CHANNEL, ///< IPC Channel capability
 	CAPTY_SOCKET,  ///< IPC Socket capability
-};
+} capty_t;
 
 /// Capability description
-union cap {
+typedef union {
 	uint64_t type : 4;
 	uint64_t raw;
 
@@ -142,10 +142,10 @@ union cap {
 		uint64_t channel : 16;
 		uint64_t tag : 16;
 	} socket;
-};
+} cap_t;
 
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
-_Static_assert(sizeof(union cap) == 8, "union cap size != 8 bytes");
+_Static_assert(sizeof(cap_t) == 8, "cap_t size != 8 bytes");
 #endif
 
 // PMP utils
@@ -153,18 +153,21 @@ uint64_t pmp_napot_addr(uint64_t begin, uint64_t end);
 uint64_t pmp_napot_begin(uint64_t addr);
 uint64_t pmp_napot_end(uint64_t addr);
 
+bool cap_can_derive(cap_t parent, cap_t child);
+bool cap_is_parent(cap_t parent, cap_t child);
+
 // Derivation check
-bool cap_time_derive(union cap parent, union cap child);
-bool cap_memory_derive(union cap parent, union cap child);
-bool cap_monitor_derive(union cap parent, union cap child);
-bool cap_channel_derive(union cap parent, union cap child);
-bool cap_socket_derive(union cap parent, union cap child);
+bool cap_time_derive(cap_t parent, cap_t child);
+bool cap_memory_derive(cap_t parent, cap_t child);
+bool cap_monitor_derive(cap_t parent, cap_t child);
+bool cap_channel_derive(cap_t parent, cap_t child);
+bool cap_socket_derive(cap_t parent, cap_t child);
 
 // Check for parent (revocation)
-bool cap_time_parent(union cap parent, union cap child);
-bool cap_memory_parent(union cap parent, union cap child);
-bool cap_monitor_parent(union cap parent, union cap child);
-bool cap_channel_parent(union cap parent, union cap child);
-bool cap_socket_parent(union cap parent, union cap child);
+bool cap_time_parent(cap_t parent, cap_t child);
+bool cap_memory_parent(cap_t parent, cap_t child);
+bool cap_monitor_parent(cap_t parent, cap_t child);
+bool cap_channel_parent(cap_t parent, cap_t child);
+bool cap_socket_parent(cap_t parent, cap_t child);
 
 #endif /* __CAP_H__ */

@@ -50,7 +50,7 @@ void schedule_init(void);
  * @param proc Pointer to the process for which the time slice should be
  *             yielded.
  */
-struct proc *schedule_yield(struct proc *proc);
+void schedule_yield(void);
 
 /**
  * @brief Find the next process to schedule.
@@ -58,7 +58,7 @@ struct proc *schedule_yield(struct proc *proc);
  * This function finds the next process to schedule based on the current
  * state of the system.
  */
-struct proc *schedule_next(void);
+void schedule_next(void);
 
 /// Delete scheduling at hartid, begin-end.
 void schedule_delete(uint64_t hartid, uint64_t begin, uint64_t end);
