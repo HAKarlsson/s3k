@@ -1,5 +1,7 @@
+#ifndef __CURRENT_H__
+#define __CURRENT_H__
 #include "proc.h"
 
-proc_t *current_get(void);
+register proc_t *current __asm__("tp");
 
-void current_set(proc_t *proc);
+#endif /* __CURRENT_H__ */

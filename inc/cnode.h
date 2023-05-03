@@ -9,6 +9,7 @@
 
 #include "cap.h"
 #include "excpt.h"
+#include "proc.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -23,23 +24,22 @@
 /// capabilities.
 ///
 
+typedef struct cnode cnode_t;
+typedef uint32_t cnode_handle_t;
+
 /**
  * @brief Initialize the cnode structure.
  */
 void cnode_init(void);
 
-static inline uint64_t cnode_idx(uint64_t pid, uint64_t idx)
-{
-	return pid * NCAP + idx;
-}
-
-cap_t cnode_cap(uint64_t idx);
-uint64_t cnode_next(uint64_t idx);
-uint64_t cnode_prev(uint64_t idx);
-bool cnode_contains(uint64_t idx);
-excpt_t cnode_update(uint64_t idx, cap_t cap);
-excpt_t cnode_insert(uint64_t idx_new, cap_t cap_new, uint64_t idx_prev);
-excpt_t cnode_move(uint64_t idx_src, uint64_t idx_dst);
-excpt_t cnode_delete_if(uint64_t idx, uint64_t pred_idx);
-excpt_t cnode_delete(uint64_t idx);
+cnode_handle_t cnode_get(uint64_t pid, uint64_t idx);
+cap_t cnode_cap(const cnode_handle_t node);
+cnode_handle_t cnode_next(const cnode_handle_t node);
+cnode_handle_t cnode_prev(const cnode_handle_t node);
+bool cnode_is_null(cnode_handle_t node);
+excpt_t cnode_update(cnode_handle_t node, cap_t cap);
+excpt_t cnode_insert(cnode_handle_t node, cap_t cap, cnode_handle_t prev);
+excpt_t cnode_move(cnode_handle_t src, cnode_handle_t dst);
+excpt_t cnode_delete(cnode_handle_t node);
+excpt_t cnode_delete_if(cnode_handle_t node, cap_t cap, cnode_handle_t pred);
 #endif /* __CNODE_H__ */

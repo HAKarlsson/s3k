@@ -7,7 +7,7 @@
  * symbol is not defined, the `kassert()` macro can be used to check whether a
  * condition is true. If the condition is false, the `kassert_failure()`
  * function will be called to report the failure. If NDEBUG is defined, then
- * if the condition is false, we get a __builtin_unreachable, hinting to the 
+ * if the condition is false, we get a __builtin_unreachable, hinting to the
  * compiler that the condition is assumed to be true.
  *
  * @copyright MIT License

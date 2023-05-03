@@ -4,6 +4,7 @@
 #include "cnode.h"
 #include "csr.h"
 #include "kassert.h"
+#include "ticket_lock.h"
 
 static proc_t _processes[NPROC];
 extern unsigned char _payload[];
@@ -83,50 +84,8 @@ bool proc_ipc_acquire(proc_t *proc, uint64_t channel_id)
 
 void proc_load_pmp(const proc_t *proc)
 {
-	uint8_t *pmp = (uint8_t *)&proc->regs[REG_PMP];
-	uint64_t pmpcfg = 0;
-	cap_t cap;
-
-	cap = cnode_cap(cnode_idx(proc->pid, pmp[0]));
-	if (cap.type == CAPTY_PMP) {
-		pmpcfg |= (uint64_t)cap.pmp.cfg;
-		csrw_pmpaddr0((uint64_t)cap.pmp.addr);
-	}
-	cap = cnode_cap(cnode_idx(proc->pid, pmp[1]));
-	if (cap.type == CAPTY_PMP) {
-		pmpcfg |= (uint64_t)cap.pmp.cfg << 8;
-		csrw_pmpaddr1((uint64_t)cap.pmp.addr);
-	}
-	cap = cnode_cap(cnode_idx(proc->pid, pmp[2]));
-	if (cap.type == CAPTY_PMP) {
-		pmpcfg |= (uint64_t)cap.pmp.cfg << 16;
-		csrw_pmpaddr2((uint64_t)cap.pmp.addr);
-	}
-	cap = cnode_cap(cnode_idx(proc->pid, pmp[3]));
-	if (cap.type == CAPTY_PMP) {
-		pmpcfg |= (uint64_t)cap.pmp.cfg << 24;
-		csrw_pmpaddr3((uint64_t)cap.pmp.addr);
-	}
-	cap = cnode_cap(cnode_idx(proc->pid, pmp[4]));
-	if (cap.type == CAPTY_PMP) {
-		pmpcfg |= (uint64_t)cap.pmp.cfg << 32;
-		csrw_pmpaddr4((uint64_t)cap.pmp.addr);
-	}
-	cap = cnode_cap(cnode_idx(proc->pid, pmp[5]));
-	if (cap.type == CAPTY_PMP) {
-		pmpcfg |= (uint64_t)cap.pmp.cfg << 40;
-		csrw_pmpaddr5((uint64_t)cap.pmp.addr);
-	}
-	cap = cnode_cap(cnode_idx(proc->pid, pmp[6]));
-	if (cap.type == CAPTY_PMP) {
-		pmpcfg |= (uint64_t)cap.pmp.cfg << 48;
-		csrw_pmpaddr6((uint64_t)cap.pmp.addr);
-	}
-	cap = cnode_cap(cnode_idx(proc->pid, pmp[7]));
-	if (cap.type == CAPTY_PMP) {
-		pmpcfg |= (uint64_t)cap.pmp.cfg << 56;
-		csrw_pmpaddr7((uint64_t)cap.pmp.addr);
-	}
-
-	csrw_pmpcfg0(pmpcfg);
+        csrw_pmpaddr0(proc->pmpconf[0] >> 8);
+        csrw_pmpcfg0(0);
+        csrw_pmpcfg0(proc->pmpconf[0] & 0xFF);
 }
+

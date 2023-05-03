@@ -12,6 +12,7 @@
 #include "common.h"
 #include "proc.h"
 
+#include <stddef.h>
 #include <stdint.h>
 
 struct sched_entry {

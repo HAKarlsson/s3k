@@ -38,6 +38,13 @@ uint64_t csrr_pmpcfg0(void);
 void csrw_pmpcfg0(uint64_t val);
 
 /**
+ * @brief Sets bits of the PMP configuration register 0 (pmpcfg0).
+ *
+ * @param val The value to set to the pmpcfg0 register.
+ */
+void csrs_pmpcfg0(uint64_t val);
+
+/**
  * @brief Read PMP address register 0.
  *
  * @return uint64_t The value of the pmpaddr0 register.

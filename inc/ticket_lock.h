@@ -19,9 +19,9 @@
 
 typedef struct {
 	/// next ticket number to be issued.
-	unsigned long next_ticket;
+	unsigned int next_ticket;
 	/// ticket number currently being served.
-	unsigned long serving_ticket;
+	unsigned int serving_ticket;
 } ticket_lock_t;
 
 /**

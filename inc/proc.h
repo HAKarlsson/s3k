@@ -12,9 +12,9 @@
 #ifndef __PROC_H__
 #define __PROC_H__
 
-#include "cnode.h"
-
+#include <stdbool.h>
 #include <stdint.h>
+#include "ticket_lock.h"
 
 enum reg {
 	/* General purpose registers */
@@ -82,6 +82,8 @@ typedef struct {
 	/** The registers of the process (RISC-V registers and virtual
 	 * registers). */
 	uint64_t regs[REG_COUNT];
+	/** PMP settings */
+        uint64_t pmpconf[8];
 	/** Process ID. */
 	uint64_t pid;
 	/** Process state. */
@@ -174,5 +176,7 @@ bool proc_ipc_acquire(proc_t *proc, uint64_t channel_id);
  * @param proc Pointer to the process for which we load PMP settings.
  */
 void proc_load_pmp(const proc_t *proc);
+
+void proc_update_pmp(proc_t *proc);
 
 #endif /* __PROC_H__ */

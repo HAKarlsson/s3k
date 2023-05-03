@@ -37,7 +37,6 @@ void schedule_next()
 {
 	uint64_t hartid;
 	uint64_t quantum, start_time, end_time;
-	proc_t *proc;
 	struct sched_entry entry;
 
 	// Get the hart ID.
@@ -55,29 +54,29 @@ retry:
 		goto retry;
 
 	// Get the process
-	proc = proc_get(entry.pid);
+	current = proc_get(entry.pid);
 
 	// Calculate start and end time.
 	start_time = quantum * NTICK;
 	end_time = start_time + entry.len * NTICK - NSLACK;
 
 	// Check if process is sleeping.
-	if (proc->sleep > end_time)
+	if (current->sleep > end_time)
 		goto retry;
 
 	// Set start_time to sleep if sleep is larger.
-	if (proc->sleep > start_time)
-		start_time = proc->sleep;
+	if (current->sleep > start_time)
+		start_time = current->sleep;
 
 	// Setup the PMP.
-	proc_load_pmp(proc);
+	proc_load_pmp(current);
 
 	// Temporary fix, QEMU does not allow this to be zero.
 	if (!csrr_pmpcfg0())
 		goto retry;
 
 	// Acquire the process.
-	if (!proc_acquire(proc, PS_READY))
+	if (!proc_acquire(current, PS_READY))
 		goto retry;
 
 	// Wait until start_time
@@ -87,14 +86,13 @@ retry:
 
 	// Set timeout
 	timeout_set(hartid, end_time);
-	current_set(proc);
 	trap_exit();
 }
 
 void schedule_yield(void)
 {
 	// Release currently held process.
-	proc_release(current_get());
+	proc_release(current);
 	// Schedule the next process.
 	schedule_next();
 }

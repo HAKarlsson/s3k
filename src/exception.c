@@ -2,6 +2,7 @@
 #include "exception.h"
 
 #include "current.h"
+#include "preemption.h"
 #include "proc.h"
 #include "trap.h"
 
@@ -18,13 +19,14 @@
  */
 static void handle_ret(void)
 {
-	proc_t *proc = current_get();
-	proc->regs[REG_PC] = proc->regs[REG_EPC];
-	proc->regs[REG_SP] = proc->regs[REG_ESP];
-	proc->regs[REG_ECAUSE] = 0;
-	proc->regs[REG_EVAL] = 0;
-	proc->regs[REG_EPC] = 0;
-	proc->regs[REG_ESP] = 0;
+	preemption_disable();
+	current->regs[REG_PC] = current->regs[REG_EPC];
+	current->regs[REG_SP] = current->regs[REG_ESP];
+	current->regs[REG_ECAUSE] = 0;
+	current->regs[REG_EVAL] = 0;
+	current->regs[REG_EPC] = 0;
+	current->regs[REG_ESP] = 0;
+	preemption_enable();
 }
 
 /*
@@ -36,13 +38,14 @@ static void handle_ret(void)
  */
 static void handle_default(uint64_t mcause, uint64_t mepc, uint64_t mtval)
 {
-	proc_t *proc = current_get();
-	proc->regs[REG_ECAUSE] = mcause;
-	proc->regs[REG_EVAL] = mtval;
-	proc->regs[REG_EPC] = proc->regs[REG_PC];
-	proc->regs[REG_ESP] = proc->regs[REG_SP];
-	proc->regs[REG_PC] = proc->regs[REG_TPC];
-	proc->regs[REG_SP] = proc->regs[REG_TSP];
+	preemption_disable();
+	current->regs[REG_ECAUSE] = mcause;
+	current->regs[REG_EVAL] = mtval;
+	current->regs[REG_EPC] = current->regs[REG_PC];
+	current->regs[REG_ESP] = current->regs[REG_SP];
+	current->regs[REG_PC] = current->regs[REG_TPC];
+	current->regs[REG_SP] = current->regs[REG_TSP];
+	preemption_enable();
 }
 
 void handle_exception(uint64_t mcause, uint64_t mepc, uint64_t mtval)

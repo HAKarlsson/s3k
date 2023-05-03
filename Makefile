@@ -28,7 +28,7 @@ CMODEL=medany
 
 INC =-include ${PLATFORM}/platform.h -include ${CONFIG_H} -Iinc -I${PLATFORM}
 CFLAGS =-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL} \
-	-std=c11 \
+        -std=c11 \
 	-Wall -Wextra -Werror \
 	-Wno-unused-parameter \
 	-Wshadow -fno-common \
@@ -40,6 +40,7 @@ CFLAGS =-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL} \
 	-Wstack-usage=1024 -fstack-usage \
 	-fno-stack-protector \
 	-Os -g3
+
 ASFLAGS=-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL} \
 	-g3
 LDFLAGS=-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL} \
@@ -54,8 +55,8 @@ LDFLAGS=-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL} \
 vpath %.c src
 vpath %.S src
 
-SRCS=head.S trap.S cap.c cnode.c csr.c current.c exception.c proc.c \
-     schedule.c syscall.c timer.c wfi.c altio.c kassert.c
+SRCS=head.S trap.S cnode.c csr.c current.c exception.c proc.c \
+     schedule.c syscall.c timer.c wfi.c altio.c kassert.c preemption.c
 OBJS=${patsubst %.S, ${BUILD}/%.o, ${patsubst %.c, ${BUILD}/%.o, ${SRCS}}}
 DEPS=${OBJS:.o=.d}
 
@@ -79,7 +80,8 @@ kernel: ${ELF}
 dasm: ${DA}
 
 size: ${ELF}
-	${SIZE} $<
+	@printf "SIZE ${@F}\n"
+	@${SIZE} $<
 
 format:
 	clang-format -i ${shell find -wholename "*.[chC]" -not -path '*/.*'}
@@ -104,7 +106,7 @@ ${BUILD}/%.elf: ${OBJS}
 
 ${BUILD}/%.da: ${BUILD}/%.elf
 	@printf "OBJDUMP ${@F}\n"
-	@${OBJDUMP} -d $< > $@
+	@${OBJDUMP} -S $< > $@
 
 .PHONY: all options clean dasm docs test kernel size
 

@@ -3,7 +3,7 @@
 #define __CONFIG_H__
 
 // Number of user processes
-#define NPROC 16
+#define NPROC 8
 // Number of capabilities per process.
 #define NCAP 32
 // Number of IPC channels.
