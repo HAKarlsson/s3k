@@ -86,7 +86,6 @@ retry:
 
 	// Set timeout
 	timeout_set(hartid, end_time);
-	trap_exit();
 }
 
 void schedule_yield(void)

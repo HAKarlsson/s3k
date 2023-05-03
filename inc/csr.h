@@ -1,6 +1,6 @@
 /**
  * @file csr.h
- * @brief Interact with platform
+ * @brief Interact with control and status registers.
  * @copyright MIT License
  * @author Henrik Karlsson (henrik10@kth.se)
  */
@@ -36,13 +36,6 @@ uint64_t csrr_pmpcfg0(void);
  * @param val The value to write to the pmpcfg0 register.
  */
 void csrw_pmpcfg0(uint64_t val);
-
-/**
- * @brief Sets bits of the PMP configuration register 0 (pmpcfg0).
- *
- * @param val The value to set to the pmpcfg0 register.
- */
-void csrs_pmpcfg0(uint64_t val);
 
 /**
  * @brief Read PMP address register 0.

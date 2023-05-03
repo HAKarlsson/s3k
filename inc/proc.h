@@ -12,66 +12,28 @@
 #ifndef __PROC_H__
 #define __PROC_H__
 
-#include <stdbool.h>
-#include <stdint.h>
 #include "ticket_lock.h"
 
-enum reg {
-	/* General purpose registers */
-	REG_PC,	 ///< Program counter
-	REG_RA,	 ///< Return address (GPR)
-	REG_SP,	 ///< Stack pointer (GPR)
-	REG_GP,	 ///< Global pointer (GPR)
-	REG_TP,	 ///< Thread pointer (GPR)
-	REG_T0,	 ///< Temporary register (GPR)
-	REG_T1,	 ///< Temporary register (GPR)
-	REG_T2,	 ///< Temporary register (GPR)
-	REG_S0,	 ///< Saved register/Stack frame pointer (GPR)
-	REG_S1,	 ///< Saved register (GPR)
-	REG_A0,	 ///< Argument/Return register (GPR)
-	REG_A1,	 ///< Argument/Return register (GPR)
-	REG_A2,	 ///< Argument register (GPR)
-	REG_A3,	 ///< Argument register (GPR)
-	REG_A4,	 ///< Argument register (GPR)
-	REG_A5,	 ///< Argument register (GPR)
-	REG_A6,	 ///< Argument register (GPR)
-	REG_A7,	 ///< Argument register (GPR)
-	REG_S2,	 ///< Saved register (GPR)
-	REG_S3,	 ///< Saved register (GPR)
-	REG_S4,	 ///< Saved register (GPR)
-	REG_S5,	 ///< Saved register (GPR)
-	REG_S6,	 ///< Saved register (GPR)
-	REG_S7,	 ///< Saved register (GPR)
-	REG_S8,	 ///< Saved register (GPR)
-	REG_S9,	 ///< Saved register (GPR)
-	REG_S10, ///< Saved register (GPR)
-	REG_S11, ///< Saved register (GPR)
-	REG_T3,	 ///< Temporary register (GPR)
-	REG_T4,	 ///< Temporary register (GPR)
-	REG_T5,	 ///< Temporary register (GPR)
-	REG_T6,	 ///< Temporary register (GPR)
-	/* Virtual registers */
-	/* Trap handling setup */
-	REG_TPC, ///< Trap program counter.
-	REG_TSP, ///< Trap stack pointer.
-	/* Exception handling registers */
-	REG_EPC,    ///< Exception program counter.
-	REG_ESP,    ///< Exception stack pointer.
-	REG_ECAUSE, ///< Exception cause code.
-	REG_EVAL,   ///< Exception value.
-	/* PMP registers */
-	REG_PMP, ///< PMP configuration.
+#include <stdbool.h>
+#include <stdint.h>
 
-/* Instrumentation registers */
-#ifdef INSTRUMENTATION
-	REG_NONPREMPT_START,
-	REG_NONPREMPT_END,
-	REG_SCHED_START,
-	REG_SCHED_END,
-#endif
-	/* End of registers */
-	REG_COUNT ///< *Number of S3K registers.*
-};
+#define PMP_COUNT 8
+
+typedef struct regs {
+	uint64_t pc;
+	uint64_t ra, sp, gp, tp;
+	uint64_t t0, t1, t2;
+	uint64_t s0, s1;
+	uint64_t a0, a1, a2, a3, a4, a5, a6, a7;
+	uint64_t s2, s3, s4, s5, s6, s7, s8, s9;
+	uint64_t s10, s11;
+	uint64_t t3, t4, t5, t6;
+	uint64_t tpc, tsp;
+	uint64_t epc, esp;
+	uint64_t ecause, eval;
+} regs_t;
+
+#define REG_COUNT (sizeof(struct regs) / sizeof(uint64_t))
 
 /**
  * @brief Process control block.
@@ -81,17 +43,16 @@ enum reg {
 typedef struct {
 	/** The registers of the process (RISC-V registers and virtual
 	 * registers). */
-	uint64_t regs[REG_COUNT];
+	regs_t regs;
 	/** PMP settings */
-        uint64_t pmpconf[8];
+	uint8_t pmpcfg[PMP_COUNT];
+	uint64_t pmpaddr[PMP_COUNT];
 	/** Process ID. */
 	uint64_t pid;
 	/** Process state. */
 	uint64_t state;
 	/** Sleep until. */
 	uint64_t sleep;
-	/** Capability destination for receive calls */
-	uint64_t cap_dest;
 } proc_t;
 
 /**
@@ -176,7 +137,5 @@ bool proc_ipc_acquire(proc_t *proc, uint64_t channel_id);
  * @param proc Pointer to the process for which we load PMP settings.
  */
 void proc_load_pmp(const proc_t *proc);
-
-void proc_update_pmp(proc_t *proc);
 
 #endif /* __PROC_H__ */

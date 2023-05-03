@@ -26,11 +26,6 @@ void csrw_pmpcfg0(uint64_t val)
 	__asm__ volatile("csrw pmpcfg0,%0" ::"r"(val));
 }
 
-void csrs_pmpcfg0(uint64_t val)
-{
-	__asm__ volatile("csrs pmpcfg0,%0" ::"r"(val));
-}
-
 uint64_t csrr_pmpaddr0(void)
 {
 	uint64_t val;

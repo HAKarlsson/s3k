@@ -119,8 +119,8 @@ typedef union {
 	struct {
 		uint64_t type : 4;
 		uint64_t rwx : 3;
-                uint64_t used : 1;
-                uint64_t idx : 4;
+		uint64_t used : 1;
+		uint64_t idx : 4;
 		uint64_t addr : 48;
 	} pmp;
 

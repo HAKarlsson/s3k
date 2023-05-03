@@ -16,7 +16,7 @@ void proc_init(void)
 		_processes[i].state = PS_SUSPENDED;
 	}
 	_processes[0].state = PS_READY;
-	_processes[0].regs[REG_PC] = (uint64_t)_payload;
+	_processes[0].regs.pc = (uint64_t)_payload;
 }
 
 proc_t *proc_get(uint64_t pid)
@@ -84,8 +84,22 @@ bool proc_ipc_acquire(proc_t *proc, uint64_t channel_id)
 
 void proc_load_pmp(const proc_t *proc)
 {
-        csrw_pmpaddr0(proc->pmpconf[0] >> 8);
-        csrw_pmpcfg0(0);
-        csrw_pmpcfg0(proc->pmpconf[0] & 0xFF);
+	uint64_t pmpcfg0 = *(uint64_t *)proc->pmpcfg;
+	uint64_t pmpaddr0 = proc->pmpaddr[0];
+	uint64_t pmpaddr1 = proc->pmpaddr[1];
+	uint64_t pmpaddr2 = proc->pmpaddr[2];
+	uint64_t pmpaddr3 = proc->pmpaddr[3];
+	uint64_t pmpaddr4 = proc->pmpaddr[4];
+	uint64_t pmpaddr5 = proc->pmpaddr[5];
+	uint64_t pmpaddr6 = proc->pmpaddr[6];
+	uint64_t pmpaddr7 = proc->pmpaddr[7];
+	csrw_pmpcfg0(pmpcfg0);
+	csrw_pmpaddr0(pmpaddr0);
+	csrw_pmpaddr1(pmpaddr1);
+	csrw_pmpaddr2(pmpaddr2);
+	csrw_pmpaddr3(pmpaddr3);
+	csrw_pmpaddr4(pmpaddr4);
+	csrw_pmpaddr5(pmpaddr5);
+	csrw_pmpaddr6(pmpaddr6);
+	csrw_pmpaddr7(pmpaddr7);
 }
-
