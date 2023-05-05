@@ -11,38 +11,88 @@
 #include "preemption.h"
 #include "proc.h"
 #include "schedule.h"
+#include "ticket_lock.h"
 #include "timer.h"
-#include "trap.h"
 
 // static proc_t *_listeners[NCHANNEL];
 
 register proc_t *current __asm__("tp");
+static ticket_lock_t _syscall_lock;
 
-static void syscall_exception(excpt_t error)
+static void syscall_lock(void)
 {
-	preemption_disable();
-	current->regs.a0 = error;
-	current->regs.pc += 4;
-	preemption_enable();
+	tl_acq(&_syscall_lock);
 }
 
-static void syscall_getinfo(uint64_t nr)
+static void syscall_unlock(void)
 {
-	uint64_t val;
-	switch (nr) {
-	case 0:
-		val = current->pid;
+	tl_rel(&_syscall_lock);
+}
+
+static uint64_t syscall_get_info(uint64_t info);
+static uint64_t syscall_get_reg(uint64_t reg);
+static void syscall_set_reg(uint64_t reg, uint64_t value);
+static void syscall_yield(void);
+static uint64_t syscall_read_cap(uint64_t cidx);
+static uint64_t syscall_move_cap(uint64_t src_cidx, uint64_t dest_cidx);
+static uint64_t syscall_delete_cap(uint64_t cidx);
+static uint64_t syscall_revoke_cap(uint64_t cidx);
+static uint64_t syscall_derive_cap(uint64_t parent_cidx, uint64_t child_cidx,
+				   uint64_t cap_raw);
+static uint64_t syscall_invoke_cap(uint64_t sysnr, uint64_t cidx);
+static uint64_t syscall_invoke_pmp(uint64_t sysnr, cnode_handle_t node,
+				   cap_t cap);
+static uint64_t syscall_invoke_monitor(uint64_t sysnr, cnode_handle_t node,
+				       cap_t cap);
+static uint64_t syscall_invoke_socket(uint64_t sysnr, cnode_handle_t node,
+				      cap_t cap);
+
+void syscall_handler(uint64_t sysnr, uint64_t a1, uint64_t a2, uint64_t a3,
+		     uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7)
+{
+	// increment PC
+	current->regs.pc += 4;
+	// Find appropriate system call
+	switch (sysnr) {
+	case SYSCALL_GET_INFO:
+		current->regs.a0 = syscall_get_info(a1);
+		break;
+	case SYSCALL_GET_REG:
+		current->regs.a0 = syscall_get_reg(a1);
+		break;
+	case SYSCALL_SET_REG:
+		syscall_set_reg(a1, a2);
+		break;
+	case SYSCALL_YIELD:
+		syscall_yield();
+		break;
+	case SYSCALL_READ_CAP:
+		current->regs.a0 = syscall_read_cap(a1);
+		break;
+	case SYSCALL_MOVE_CAP:
+		current->regs.a0 = syscall_move_cap(a1, a2);
+		break;
+	case SYSCALL_DELETE_CAP:
+		current->regs.a0 = syscall_delete_cap(a1);
+		break;
+	case SYSCALL_REVOKE_CAP:
+		current->regs.a0 = syscall_revoke_cap(a1);
+		break;
+	case SYSCALL_DERIVE_CAP:
+		current->regs.a0 = syscall_derive_cap(a1, a2, a3);
 		break;
 	default:
-		val = 0;
+		current->regs.a0 = syscall_invoke_cap(sysnr, a1);
+		break;
 	}
-	preemption_disable();
-	current->regs.a0 = val;
-	current->regs.pc += 4;
-	preemption_enable();
 }
 
-static void syscall_getreg(uint64_t reg)
+uint64_t syscall_get_info(uint64_t nr)
+{
+	return 0;
+}
+
+uint64_t syscall_get_reg(uint64_t reg)
 {
 	uint64_t val;
 	uint64_t *regs = (uint64_t *)&current->regs;
@@ -51,382 +101,384 @@ static void syscall_getreg(uint64_t reg)
 	} else {
 		val = 0;
 	}
-	preemption_disable();
-	current->regs.a0 = val;
-	current->regs.pc += 4;
-	preemption_enable();
+	return val;
 }
 
-static void syscall_setreg(uint64_t reg, uint64_t val)
+void syscall_set_reg(uint64_t reg, uint64_t value)
 {
 	uint64_t *regs = (uint64_t *)&current->regs;
-	preemption_disable();
 	if (reg < REG_COUNT)
-		regs[reg] = val;
-	current->regs.pc += 4;
-	preemption_enable();
+		regs[reg] = value;
 }
 
-static void syscall_yield(void)
+void syscall_yield(void)
 {
 	schedule_yield();
 }
 
-static void syscall_getcap(uint64_t idx)
+uint64_t syscall_read_cap(uint64_t cidx)
 {
-	if (idx >= NCAP) {
-		syscall_exception(EXCPT_INDEX);
-		return;
-	}
-	cnode_handle_t node = cnode_get(current->pid, idx);
+	if (cidx >= CAP_COUNT)
+		return EXCPT_INDEX;
+	cnode_handle_t node = cnode_get(current->pid, cidx);
 	cap_t cap = cnode_cap(node);
-	preemption_disable();
-	current->regs.a0 = cap.raw;
-	current->regs.pc += 4;
-	preemption_enable();
+	current->regs.a1 = cap.raw;
+	return EXCPT_NONE;
 }
 
-static void syscall_movcap(uint64_t src_idx, uint64_t dst_idx)
+uint64_t syscall_move_cap(uint64_t src_idx, uint64_t dst_idx)
 {
-	if (src_idx >= NCAP || dst_idx >= NCAP) {
-		syscall_exception(EXCPT_INDEX);
-		return;
-	}
+	if (src_idx >= CAP_COUNT || dst_idx >= CAP_COUNT)
+		return EXCPT_INDEX;
+
 	cnode_handle_t src = cnode_get(current->pid, src_idx);
 	cnode_handle_t dst = cnode_get(current->pid, dst_idx);
 
-	preemption_disable();
-	current->regs.a0 = cnode_move(src, dst);
-	current->regs.pc += 4;
-	preemption_enable();
+	// Check if capability exists
+	if (cnode_is_null(src))
+		return EXCPT_EMPTY;
+
+	// Check if destination is occupied
+	if (!cnode_is_null(dst))
+		return EXCPT_COLLISION;
+
+	syscall_lock();
+	excpt_t status = cnode_move(src, dst) ? EXCPT_NONE : EXCPT_EMPTY;
+	syscall_unlock();
+	return status;
 }
 
-static void syscall_delcap(uint64_t idx)
+static void syscall_delete_cleanup(cap_t cap)
 {
-	if (idx >= NCAP) {
-		syscall_exception(EXCPT_INDEX);
-		return;
+	// If the capability is PMP, then unset the pmp config if it was used.
+	if (cap.type == CAPTY_PMP && cap.pmp.used) {
+		proc_pmp_clear(current, cap.pmp.idx);
+		proc_pmp_load(current);
 	}
-	cnode_handle_t node = cnode_get(current->pid, idx);
-	preemption_disable();
-	current->regs.a0 = cnode_delete(node);
-	current->regs.pc += 4;
-	preemption_enable();
+
+	// If the capability is time, then delete the time from schedule if
+	// used.
+	if (cap.type == CAPTY_TIME && cap.time.free < cap.time.end)
+		schedule_delete(cap.time.hartid, cap.time.free, cap.time.end);
 }
 
-static void syscall_drvcap(uint64_t src_idx, uint64_t drv_idx, uint64_t cap_raw)
+uint64_t syscall_delete_cap(uint64_t cidx)
 {
-	if (src_idx >= NCAP || drv_idx >= NCAP) {
-		syscall_exception(EXCPT_INDEX);
-		return;
-	}
+	if (cidx >= CAP_COUNT)
+		return EXCPT_INDEX;
 
-	cnode_handle_t src = cnode_get(current->pid, src_idx);
-	cnode_handle_t drv = cnode_get(current->pid, drv_idx);
-
-	cap_t src_cap = cnode_cap(src);
-	cap_t drv_cap = (cap_t){ .raw = cap_raw };
-
-	if (!cap_can_derive(src_cap, drv_cap)) {
-		syscall_exception(EXCPT_DERIVATION);
-		return;
-	}
-
-	if (cap_get_type(src_cap) == CAPTY_TIME) {
-		cap_time_set_free(&src_cap, cap_time_get_begin(drv_cap));
-	} else if (cap_get_type(src_cap) == CAPTY_MEMORY
-		   && cap_get_type(drv_cap) == CAPTY_MEMORY) {
-		cap_memory_set_free(&src_cap, cap_memory_get_begin(drv_cap));
-	} else if (cap_get_type(src_cap) == CAPTY_MEMORY
-		   && cap_get_type(drv_cap) == CAPTY_PMP) {
-		cap_memory_set_lock(&src_cap, 1);
-	} else if (cap_get_type(src_cap) == CAPTY_CHANNEL
-		   && cap_get_type(drv_cap) == CAPTY_CHANNEL) {
-		cap_channel_set_free(&src_cap, cap_channel_get_begin(drv_cap));
-	} else if (cap_get_type(src_cap) == CAPTY_CHANNEL
-		   && cap_get_type(drv_cap) == CAPTY_SOCKET) {
-		cap_channel_set_free(&src_cap,
-				     cap_socket_get_channel(drv_cap) + 1);
-	} else if (cap_get_type(src_cap) == CAPTY_MONITOR) {
-		cap_monitor_set_free(&src_cap, cap_monitor_get_begin(drv_cap));
-	} else if (cap_get_type(src_cap) == CAPTY_SOCKET) {
-		cap_socket_set_listeners(&src_cap,
-					 cap_socket_get_listeners(src_cap) + 1);
-	}
-
-	preemption_disable();
-	excpt_t status = cnode_update(src, src_cap);
-	if (status == EXCPT_NONE) {
-		status = cnode_insert(drv, drv_cap, src);
-	}
-	current->regs.a0 = status;
-	current->regs.pc += 4;
-	preemption_enable();
-}
-
-static void syscall_revcap(uint64_t idx)
-{
-	if (idx >= NCAP) {
-		syscall_exception(EXCPT_INDEX);
-		return;
-	}
-
-	// If preempted, return with preempted error msg.
-	syscall_exception(EXCPT_PREEMPTED);
-
-	cnode_handle_t node = cnode_get(current->pid, idx);
+	cnode_handle_t node = cnode_get(current->pid, cidx);
 	cap_t cap = cnode_cap(node);
+	excpt_t status;
 
-	while (cnode_is_null(node)) {
-		cnode_handle_t next_node = cnode_next(node);
-		cap_t next_cap = cnode_cap(next_node);
-		if (!cap_is_child(cap, next_cap))
-			break;
-		preemption_disable();
-		cnode_delete_if(next_node, next_cap, node);
-		preemption_enable();
-	}
+	syscall_lock();
+	status = cnode_delete(node);
+	if (status == EXCPT_NONE)
+		syscall_delete_cleanup(cap);
+	syscall_unlock();
+	return status;
+}
 
-	switch (cap_get_type(cap)) {
+static excpt_t syscall_derive_update(cnode_handle_t parent_node,
+				     cap_t parent_cap,
+				     cnode_handle_t child_node, cap_t child_cap)
+{
+	// Set how the source cap should be updated.
+	switch (child_cap.type) {
 	case CAPTY_TIME:
-		cap_time_set_free(&cap, cap_time_get_begin(cap));
+		parent_cap.time.free = child_cap.time.begin;
 		break;
 	case CAPTY_MEMORY:
-		cap_memory_set_free(&cap, cap_memory_get_begin(cap));
-		cap_memory_set_lock(&cap, 0);
-		break;
-	case CAPTY_CHANNEL:
-		cap_channel_set_free(&cap, cap_channel_get_begin(cap));
-		break;
-	case CAPTY_MONITOR:
-		cap_monitor_set_free(&cap, cap_monitor_get_begin(cap));
-		break;
-	case CAPTY_SOCKET:
-		cap_socket_set_listeners(&cap, 0);
-		break;
-	default:
-		current->regs.a0 = EXCPT_NONE;
-		return;
-	}
-
-	preemption_disable();
-	//! No updating PC
-	current->regs.a0 = cnode_update(node, cap);
-	preemption_enable();
-}
-
-/**
- * Use a PMP capability to load its configuration to a certain
- * pmp slot.
- *
- * Notes:
- * We set the pmp config before updating the associated capability. Why?
- * Suppose thread A update the PMP capability X, then set pmpcfg.
- * Thread B is doing a revoke operationg, deleting X, then unsetting the config
- * if X was used at the point of deletion. We have the following scenario:
- * - Thread A: Updates X, now X says that pmpcfg_i is used.
- * - Thread B: Deletes X, sees that pmpcfg_i was used by X.
- * - Thread B: Unsets pmpcfg_i.
- * - Thread A: Sets pmpcfg_i.
- * Now we have a scenario where pmpcfg_i is set without an associated PMP
- * capability.
- *
- * By setting the PMP configuration first, we can revert when we notice that the
- * update has failed. Thus after the operation has finished (more specifically,
- * in a quiescent period, pmpcfg_i is never set unless there is an associated
- * PMP capability.
- *
- * Lets look at above scenario using this method:
- * - Thread A: Sets pmpcfg_i.
- * - Thread A: Updates X, now X says that pmpcfg_i is used.
- * - Thread B: Deletes X, sees that pmpcfg_i was used by X.
- * - Thread B: Unsets pmpcfg_i.
- * Or
- * - Thread A: Sets pmpcfg_i.
- * - Thread B: Deletes X, sees that pmpcfg_i was used by X.
- * - Thread A: Attempts updates X, fails because X has been deleted.
- * - Thread A: Unsets pmpcfg_i
- * The moment thread B unsets pmpcfg_i is irrelevant as both A and B
- * unsets pmpcfg_i as a last action.
- */
-static void syscall_invpmp_load(cnode_handle_t node, cap_t cap)
-{
-	// Used - Set if PMP capability is being used.
-	uint64_t used = cap_pmp_get_used(cap);
-	// Index - The PMP configuration index.
-	uint64_t idx = current->regs.a2 % PMP_COUNT;
-
-	// Check if pmp capability is already being used.
-	if (used) {
-		// If used, we have a collision exception
-		syscall_exception(EXCPT_COLLISION);
-		return;
-	}
-
-	// Check if pmpcfg[idx] is begin used.
-	if (current->pmpcfg[idx]) {
-		// If used, we have a collision exception
-		syscall_exception(EXCPT_COLLISION);
-		return;
-	}
-
-	// Set used and idx fields.
-	cap_pmp_set_used(&cap, 1);
-	cap_pmp_set_idx(&cap, idx);
-
-	// Disable preemption!!!
-	preemption_disable();
-
-	// Optimistically update the pmp config
-	current->pmpaddr[idx] = cap_pmp_get_addr(cap);
-	__atomic_thread_fence(__ATOMIC_SEQ_CST);
-	current->pmpcfg[idx] = cap_pmp_get_rwx(cap) | 0x18;
-
-	// Update the node
-	excpt_t status = cnode_update(node, cap);
-
-	// If update fails, then node was deleted, revert the pmp config update
-	if (status != EXCPT_NONE) {
-		current->pmpcfg[idx] = 0;
-	}
-
-	// Update registers
-	current->regs.a0 = status;
-	current->regs.pc += 4;
-
-	// Enable preemption!!!
-	preemption_enable();
-}
-
-static void syscall_invpmp_unload(cnode_handle_t node, cap_t cap)
-{
-	// Used - Set if PMP capability is being used.
-	uint64_t used = cap_pmp_get_used(cap);
-	// Index - The PMP configuration index.
-	uint64_t idx = cap_pmp_get_idx(cap);
-
-	// If not used, then nothing to unload.
-	if (!used) {
-		syscall_exception(EXCPT_NONE);
-		return;
-	}
-
-	// Unset used and idx fields
-	cap_pmp_set_used(&cap, 0);
-	cap_pmp_set_idx(&cap, 0);
-
-	// Disable preemption!!!
-	preemption_disable();
-
-	// Update node
-	excpt_t status = cnode_update(node, cap);
-
-	// If update was a success, then set pmpconf[idx] to 0.
-	if (status == EXCPT_NONE) {
-		current->pmpcfg[idx] = 0;
-	}
-
-	// Update registers
-	current->regs.a0 = status;
-	current->regs.pc += 4;
-
-	// Enable preemption!!!
-	preemption_enable();
-}
-
-static void syscall_invpmp(cnode_handle_t node, cap_t cap)
-{
-	kassert(cap.type == CAPTY_PMP);
-	uint64_t inv = current->regs.a1;
-	switch (inv) {
-	case 0:
-		syscall_invpmp_load(node, cap);
-		break;
-	case 1:
-		syscall_invpmp_unload(node, cap);
-		break;
-	default:
-		syscall_exception(EXCPT_UNIMPLEMENTED);
-		break;
-	}
-}
-
-static void syscall_invsocket(cnode_handle_t node, cap_t cap)
-{
-	kassert(cap.type == CAPTY_SOCKET);
-	syscall_exception(EXCPT_UNIMPLEMENTED);
-}
-
-static void syscall_invmonitor(cnode_handle_t node, cap_t cap)
-{
-	kassert(cap.type == CAPTY_MONITOR);
-	syscall_exception(EXCPT_UNIMPLEMENTED);
-}
-
-static void syscall_invcap(uint64_t idx)
-{
-	if (idx >= NCAP) {
-		syscall_exception(EXCPT_INDEX);
-		return;
-	}
-
-	cnode_handle_t node = cnode_get(current->pid, idx);
-	cap_t cap = cnode_cap(node);
-
-	switch (cap_get_type(cap)) {
-	case CAPTY_NONE:
-		syscall_exception(EXCPT_EMPTY);
+		parent_cap.memory.free = child_cap.memory.begin;
 		break;
 	case CAPTY_PMP:
-		syscall_invpmp(node, cap);
+		parent_cap.memory.lock = 1;
+		break;
+	case CAPTY_CHANNEL:
+		parent_cap.channel.free = child_cap.channel.begin;
 		break;
 	case CAPTY_SOCKET:
-		syscall_invsocket(node, cap);
-		break;
-	case CAPTY_MONITOR:
-		syscall_invmonitor(node, cap);
+		if (child_cap.socket.tag == 0) // Parent is channel
+			parent_cap.channel.free = child_cap.socket.channel + 1;
+		// Otherwise parent is socket
 		break;
 	default:
-		syscall_exception(EXCPT_UNIMPLEMENTED);
+		__builtin_unreachable();
+	}
+
+	excpt_t status = cnode_update(parent_node, parent_cap);
+	if (status != EXCPT_NONE)
+		return status;
+
+	if (child_cap.type == CAPTY_TIME)
+		schedule_update(current->pid, child_cap.time.hartid,
+				child_cap.time.free, child_cap.time.end);
+	return EXCPT_NONE;
+}
+
+uint64_t syscall_derive_cap(uint64_t parent_cidx, uint64_t child_cidx,
+			    uint64_t child_raw)
+{
+	if (parent_cidx >= CAP_COUNT || child_cidx >= CAP_COUNT)
+		return EXCPT_INDEX;
+
+	cnode_handle_t parent_node = cnode_get(current->pid, parent_cidx);
+	cnode_handle_t child_node = cnode_get(current->pid, child_cidx);
+
+	cap_t parent_cap = cnode_cap(parent_node);
+	cap_t child_cap = (cap_t){ .raw = child_raw };
+
+	if (cnode_is_null(parent_node))
+		return EXCPT_EMPTY;
+
+	if (!cnode_is_null(child_node))
+		return EXCPT_COLLISION;
+
+	if (!cap_can_derive(parent_cap, child_cap))
+		return EXCPT_DERIVATION;
+
+	if (preemption())
+		return EXCPT_PREEMPTED;
+
+	syscall_lock();
+	excpt_t status = syscall_derive_update(parent_node, parent_cap,
+					       child_node, child_cap);
+	syscall_unlock();
+	return status;
+}
+
+// Clean up resources of the child cap
+static void syscall_revoke_cleanup(cnode_handle_t parent_node, cap_t parent_cap,
+				   cnode_handle_t child_node, cap_t child_cap)
+{
+	// Try delete child
+	if (!cnode_delete_if(child_node, child_cap, parent_node))
+		return;
+
+	// Update parent
+	switch (child_cap.type) {
+	case CAPTY_TIME:
+		parent_cap.time.free = child_cap.time.free;
 		break;
+	case CAPTY_MEMORY:
+		parent_cap.memory.free = child_cap.memory.free;
+		parent_cap.memory.lock = child_cap.memory.lock;
+		break;
+	case CAPTY_CHANNEL:
+		parent_cap.channel.free = child_cap.channel.free;
+		break;
+	default:
+	}
+
+	if (!cnode_update(parent_node, parent_cap))
+		return;
+
+	if (child_cap.type == CAPTY_TIME
+	    && child_cap.time.free < child_cap.time.end) {
+		// If child was using time, give the time to the parent.
+		schedule_update(current->pid, parent_cap.time.hartid,
+				parent_cap.time.free, parent_cap.time.end);
+	}
+
+	if (child_cap.type == CAPTY_PMP && child_cap.pmp.used) {
+		// If pmp was used, clear relevant pmp config.
+		proc_t *proc = proc_get(cnode_pid(child_node));
+		proc_pmp_clear(proc, child_cap.pmp.idx);
+		if (proc == current)
+			proc_pmp_load(current);
 	}
 }
 
-void syscall_handler(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3,
-		     uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7)
+// Get the restored capability.
+static excpt_t syscall_revoke_restore(cnode_handle_t node, cap_t cap)
 {
-	switch (a7) {
-	case SYSCALL_GETINFO:
-		syscall_getinfo(a0);
+	switch (cap.type) {
+	case CAPTY_TIME:
+		cap.time.free = cap.time.begin;
 		break;
-	case SYSCALL_GETREG:
-		syscall_getreg(a0);
+	case CAPTY_MEMORY:
+		cap.memory.free = cap.memory.begin;
 		break;
-	case SYSCALL_SETREG:
-		syscall_setreg(a0, a1);
+	case CAPTY_MONITOR:
+		cap.monitor.free = cap.monitor.begin;
 		break;
-	case SYSCALL_YIELD:
-		syscall_yield();
+	case CAPTY_CHANNEL:
+		cap.channel.free = cap.channel.begin;
 		break;
-	case SYSCALL_GETCAP:
-		syscall_getcap(a0);
-		break;
-	case SYSCALL_MOVCAP:
-		syscall_movcap(a0, a1);
-		break;
-	case SYSCALL_DELCAP:
-		syscall_delcap(a0);
-		break;
-	case SYSCALL_DRVCAP:
-		syscall_drvcap(a0, a1, a2);
-		break;
-	case SYSCALL_REVCAP:
-		syscall_revcap(a0);
-		break;
-	case SYSCALL_INVCAP:
-		syscall_invcap(a0);
-		break;
+	}
+
+	if (!cnode_update(node, cap))
+		return EXCPT_EMPTY;
+
+	if (cap.type == CAPTY_TIME)
+		schedule_update(current->pid, cap.time.hartid, cap.time.free,
+				cap.time.end);
+
+	return EXCPT_NONE;
+}
+
+uint64_t syscall_revoke_cap(uint64_t cidx)
+{
+	if (cidx >= CAP_COUNT)
+		return EXCPT_INDEX;
+
+	cnode_handle_t parent_node = cnode_get(current->pid, cidx);
+	cap_t parent_cap = cnode_cap(parent_node);
+
+	cnode_handle_t next_node = cnode_next(parent_node);
+	cap_t next_cap = cnode_cap(next_node);
+
+	while (!cnode_is_null(parent_node)
+	       && cap_is_child(parent_cap, next_cap)) {
+		if (preemption())
+			return EXCPT_PREEMPTED;
+		syscall_lock();
+		// try to delete the child and take back the resources.
+		syscall_revoke_cleanup(parent_node, parent_cap, next_node,
+				       next_cap);
+		syscall_unlock();
+	}
+
+	if (preemption())
+		return EXCPT_PREEMPTED;
+
+	syscall_lock();
+	// Restore the cap and system.
+	excpt_t status = syscall_revoke_restore(parent_node, parent_cap);
+	syscall_unlock();
+	return status;
+}
+
+uint64_t syscall_invoke_cap(uint64_t sysnr, uint64_t cidx)
+{
+	if (cidx >= CAP_COUNT)
+		return EXCPT_INDEX;
+
+	cnode_handle_t node = cnode_get(current->pid, cidx);
+	cap_t cap = cnode_cap(node);
+
+	switch (cap.type) {
+	case CAPTY_NONE:
+		return EXCPT_EMPTY;
+	case CAPTY_PMP:
+		return syscall_invoke_pmp(sysnr, node, cap);
+	case CAPTY_MONITOR:
+		return syscall_invoke_monitor(sysnr, node, cap);
+	case CAPTY_SOCKET:
+		return syscall_invoke_socket(sysnr, node, cap);
 	default:
-		syscall_exception(EXCPT_UNIMPLEMENTED);
+		return EXCPT_UNIMPLEMENTED;
+	}
+}
+
+uint64_t syscall_invoke_pmp(uint64_t sysnr, cnode_handle_t node, cap_t cap)
+{
+	switch (sysnr) {
+	case SYSCALL_PMP_SET: {
+		uint64_t index = current->regs.a2;
+		if (index >= PMP_COUNT)
+			return EXCPT_INDEX;
+		if (cap.pmp.used || proc_pmp_is_set(current, index))
+			return EXCPT_COLLISION;
+		excpt_t status;
+		syscall_lock();
+		cap.pmp.used = 1;
+		cap.pmp.idx = index;
+		if (cnode_update(node, cap)) {
+			status = EXCPT_NONE;
+			proc_pmp_set(current, index, cap.pmp.addr, cap.pmp.rwx);
+		} else {
+			status = EXCPT_EMPTY;
+		}
+		syscall_unlock();
+		return status;
+	}
+	case SYSCALL_PMP_CLEAR: {
+		if (cap.pmp.used)
+			return EXCPT_NONE;
+		proc_pmp_clear(current, cap.pmp.idx);
+		cap.pmp.used = 0;
+		cap.pmp.idx = 0;
+		excpt_t status;
+		syscall_lock();
+		status = cnode_update(node, cap) ? EXCPT_NONE : EXCPT_EMPTY;
+		syscall_unlock();
+		return status;
+	}
+	default:
+		return EXCPT_UNIMPLEMENTED;
+	}
+}
+
+uint64_t syscall_invoke_monitor(uint64_t sysnr, cnode_handle_t node, cap_t cap)
+{
+	uint64_t pid = current->regs.a2;
+	if (pid >= PROC_COUNT)
+		return EXCPT_MPID;
+	proc_t *proc = proc_get(pid);
+	switch (sysnr) {
+	case SYSCALL_MONITOR_SUSPEND: {
+		proc_suspend(proc);
+		return EXCPT_NONE;
+	}
+	case SYSCALL_MONITOR_RESUME: {
+		proc_resume(proc);
+		return EXCPT_NONE;
+	}
+	case SYSCALL_MONITOR_GET_REG: {
+		uint64_t expct_state = proc->state & PSF_SUSPEND;
+		uint64_t *regs = (uint64_t *)&proc->regs;
+		uint64_t reg = current->regs.a3;
+		if (reg >= REG_COUNT)
+			return EXCPT_INDEX;
+		if (!proc_acquire(proc, expct_state))
+			return EXCPT_MBUSY;
+		current->regs.a1 = regs[reg];
+		proc_release(proc);
+		return EXCPT_NONE;
+	}
+	case SYSCALL_MONITOR_SET_REG: {
+		uint64_t expct_state = proc->state & PSF_SUSPEND;
+		uint64_t *regs = (uint64_t *)&proc->regs;
+		uint64_t reg = current->regs.a3;
+		uint64_t value = current->regs.a4;
+		if (reg >= REG_COUNT)
+			return EXCPT_INDEX;
+		if (!proc_acquire(proc, expct_state))
+			return EXCPT_MBUSY;
+		regs[reg] = value;
+		proc_release(proc);
+		return EXCPT_NONE;
+	}
+	case SYSCALL_MONITOR_READ_CAP: {
+		uint64_t expct_state = proc->state & PSF_SUSPEND;
+		uint64_t cidx = current->regs.a3;
+		if (cidx >= CAP_COUNT)
+			return EXCPT_INDEX;
+		if (!proc_acquire(proc, expct_state))
+			return EXCPT_MBUSY;
+		cnode_handle_t read_cnode = cnode_get(pid, cidx);
+		cap_t read_cap = cnode_cap(read_cnode);
+		current->regs.a1 = read_cap.raw;
+		proc_release(proc);
+		return EXCPT_NONE;
+	}
+	case SYSCALL_MONITOR_TAKE_CAP:
+	case SYSCALL_MONITOR_GIVE_CAP:
+	case SYSCALL_MONITOR_PMP_SET:
+	case SYSCALL_MONITOR_PMP_CLEAR:
+	default:
+		return EXCPT_UNIMPLEMENTED;
+	}
+}
+
+uint64_t syscall_invoke_socket(uint64_t sysnr, cnode_handle_t node, cap_t cap)
+{
+	switch (sysnr) {
+	case SYSCALL_SOCKET_RECV:
+	case SYSCALL_SOCKET_SEND:
+	case SYSCALL_SOCKET_SENDRECV:
+	default:
+		return EXCPT_UNIMPLEMENTED;
 	}
 }

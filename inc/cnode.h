@@ -33,13 +33,14 @@ typedef uint32_t cnode_handle_t;
 void cnode_init(void);
 
 cnode_handle_t cnode_get(uint64_t pid, uint64_t idx);
-cap_t cnode_cap(const cnode_handle_t node);
-cnode_handle_t cnode_next(const cnode_handle_t node);
-cnode_handle_t cnode_prev(const cnode_handle_t node);
+cap_t cnode_cap(cnode_handle_t node);
+cnode_handle_t cnode_next(cnode_handle_t node);
+cnode_handle_t cnode_prev(cnode_handle_t node);
+uint64_t cnode_pid(cnode_handle_t node);
 bool cnode_is_null(cnode_handle_t node);
-excpt_t cnode_update(cnode_handle_t node, cap_t cap);
-excpt_t cnode_insert(cnode_handle_t node, cap_t cap, cnode_handle_t prev);
-excpt_t cnode_move(cnode_handle_t src, cnode_handle_t dst);
-excpt_t cnode_delete(cnode_handle_t node);
-excpt_t cnode_delete_if(cnode_handle_t node, cap_t cap, cnode_handle_t pred);
+bool cnode_update(cnode_handle_t node, cap_t cap);
+bool cnode_insert(cnode_handle_t node, cap_t cap, cnode_handle_t prev);
+bool cnode_move(cnode_handle_t src, cnode_handle_t dst);
+bool cnode_delete(cnode_handle_t node);
+bool cnode_delete_if(cnode_handle_t node, cap_t cap, cnode_handle_t pred);
 #endif /* __CNODE_H__ */

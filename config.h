@@ -3,17 +3,17 @@
 #define __CONFIG_H__
 
 // Number of user processes
-#define NPROC 8
+#define PROC_COUNT 8
 // Number of capabilities per process.
-#define NCAP 32
+#define CAP_COUNT 32
 // Number of IPC channels.
-#define NCHANNEL 16
+#define CHANNEL_COUNT 16
 // Number of slices per period
-#define NSLICE 64ull
-// Number of ticks per slice
-#define NTICK (TICKS_PER_SECOND / NSLICE / 100ull)
+#define SLICE_COUNT 64ull
+// Length of time slice in ticks.
+#define SLICE_LENGTH (TICKS_PER_SECOND / SLICE_COUNT / 100ull)
 // Number of slack ticks per slice
-#define NSLACK 10000
+#define SLACK_LENGTH 10000
 
 // If debugging, uncomment
 #define NDEBUG

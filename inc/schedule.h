@@ -9,6 +9,7 @@
 #ifndef __SCHED_H__
 #define __SCHED_H__
 
+#include "cnode.h"
 #include "common.h"
 #include "proc.h"
 
@@ -63,8 +64,9 @@ void schedule_next(void);
 
 /// Delete scheduling at hartid, begin-end.
 void schedule_delete(uint64_t hartid, uint64_t begin, uint64_t end);
+
 /// Let pid run on hartid, begin-end.
-void schedule_update(uint64_t hartid, uint64_t pid, uint64_t begin,
+void schedule_update(uint64_t pid, uint64_t hartid, uint64_t begin,
 		     uint64_t end);
 
 #endif /* __SCHED_H__ */

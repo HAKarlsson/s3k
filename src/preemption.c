@@ -1,11 +1,10 @@
 #include "preemption.h"
 
-void preemption_disable(void)
-{
-	__asm__ volatile("csrci mstatus, 8");
-}
+#include "csr.h"
 
-void preemption_enable(void)
+#define MIP_MTIP 0x80
+
+bool preemption(void)
 {
-	__asm__ volatile("csrsi mstatus, 8");
+	return csrr_mip() & MIP_MTIP;
 }

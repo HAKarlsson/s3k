@@ -19,14 +19,12 @@
  */
 static void handle_ret(void)
 {
-	preemption_disable();
 	current->regs.pc = current->regs.epc;
 	current->regs.sp = current->regs.esp;
 	current->regs.ecause = 0;
 	current->regs.eval = 0;
 	current->regs.epc = 0;
 	current->regs.esp = 0;
-	preemption_enable();
 }
 
 /*
@@ -38,14 +36,12 @@ static void handle_ret(void)
  */
 static void handle_default(uint64_t mcause, uint64_t mepc, uint64_t mtval)
 {
-	preemption_disable();
 	current->regs.ecause = mcause;
 	current->regs.eval = mtval;
 	current->regs.epc = current->regs.pc;
 	current->regs.esp = current->regs.sp;
 	current->regs.pc = current->regs.tpc;
 	current->regs.sp = current->regs.tsp;
-	preemption_enable();
 }
 
 void handle_exception(uint64_t mcause, uint64_t mepc, uint64_t mtval)

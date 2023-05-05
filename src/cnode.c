@@ -15,14 +15,13 @@ struct cnode {
 	cnode_handle_t next;
 };
 
-ticket_lock_t _cnode_lock;
-cnode_t _cnodes[NPROC * NCAP];
+cnode_t _cnodes[PROC_COUNT * CAP_COUNT];
 
 cnode_handle_t cnode_get(uint64_t pid, uint64_t idx)
 {
-	kassert(pid < NPROC);
-	kassert(idx < NCAP);
-	return pid * NCAP + idx;
+	kassert(pid < PROC_COUNT);
+	kassert(idx < CAP_COUNT);
+	return pid * CAP_COUNT + idx;
 }
 
 cnode_handle_t cnode_next(cnode_handle_t node)
@@ -35,12 +34,17 @@ cnode_handle_t cnode_prev(cnode_handle_t node)
 	return _cnodes[node].prev;
 }
 
-void cnode_setnext(cnode_handle_t node, cnode_handle_t next)
+uint64_t cnode_pid(cnode_handle_t node)
+{
+	return node / CAP_COUNT;
+}
+
+void cnode_set_next(cnode_handle_t node, cnode_handle_t next)
 {
 	_cnodes[node].next = next;
 }
 
-void cnode_setprev(cnode_handle_t node, cnode_handle_t prev)
+void cnode_set_prev(cnode_handle_t node, cnode_handle_t prev)
 {
 	_cnodes[node].prev = prev;
 }
@@ -50,7 +54,7 @@ cap_t cnode_cap(const cnode_handle_t node)
 	return _cnodes[node].cap;
 }
 
-void cnode_setcap(cnode_handle_t node, cap_t cap)
+void cnode_set_cap(cnode_handle_t node, cap_t cap)
 {
 	_cnodes[node].cap.raw = cap.raw;
 }
@@ -62,7 +66,7 @@ bool cnode_is_null(cnode_handle_t node)
 
 void cnode_init(void)
 {
-	kassert(ARRAY_SIZE(init_caps) < NCAP);
+	kassert(ARRAY_SIZE(init_caps) < CAP_COUNT);
 
 	cnode_handle_t first = cnode_get(0, 0);
 	cnode_handle_t last = cnode_get(0, 0);
@@ -70,112 +74,65 @@ void cnode_init(void)
 	// Add initial capabilities.
 	for (size_t i = 0; i < ARRAY_SIZE(init_caps); ++i) {
 		cnode_handle_t node = cnode_get(0, i);
-		cnode_setnext(last, cnode_next(node));
-		cnode_setnext(first, cnode_next(node));
-		cnode_setprev(node, last);
-		cnode_setnext(node, first);
-		cnode_setcap(node, init_caps[i]);
+		cnode_set_next(last, cnode_next(node));
+		cnode_set_next(first, cnode_next(node));
+		cnode_set_prev(node, last);
+		cnode_set_next(node, first);
+		cnode_set_cap(node, init_caps[i]);
 		last = node;
 	}
 }
 
-excpt_t cnode_update(cnode_handle_t node, cap_t cap)
+bool cnode_update(cnode_handle_t node, cap_t cap)
 {
-	excpt_t status;
-	tl_acq(&_cnode_lock);
-	if (cnode_is_null(node)) {
-		status = EXCPT_EMPTY;
-	} else {
-		status = EXCPT_NONE;
-		cnode_setcap(node, cap);
-	}
-	tl_rel(&_cnode_lock);
-	return status;
+	if (cnode_is_null(node))
+		return false;
+	cnode_set_cap(node, cap);
+	return true;
 }
 
-excpt_t cnode_insert(cnode_handle_t node, cap_t cap, cnode_handle_t prev)
+bool cnode_insert(cnode_handle_t node, cap_t cap, cnode_handle_t prev)
 {
-	excpt_t status;
-	tl_acq(&_cnode_lock);
-	if (!cnode_is_null(node)) {
-		status = EXCPT_COLLISION;
-	} else if (cnode_is_null(prev)) {
-		status = EXCPT_EMPTY;
-	} else {
-		status = EXCPT_NONE;
-		cnode_handle_t next = cnode_next(prev);
-
-		// Connect with next
-		cnode_setprev(next, node);
-		cnode_setnext(node, next);
-
-		// connect with prev
-		cnode_setprev(node, prev);
-		cnode_setnext(prev, node);
-
-		cnode_setcap(node, cap);
-	}
-	tl_rel(&_cnode_lock);
-	return status;
+	if (cnode_is_null(prev) || !cnode_is_null(node))
+		return false;
+	cnode_handle_t next = cnode_next(prev);
+	cnode_set_prev(next, node);
+	cnode_set_next(node, next);
+	cnode_set_prev(node, prev);
+	cnode_set_next(prev, node);
+	cnode_set_cap(node, cap);
+	return true;
 }
 
-excpt_t cnode_move(cnode_handle_t src, cnode_handle_t dst)
+bool cnode_move(cnode_handle_t src, cnode_handle_t dst)
 {
-	excpt_t status;
-	tl_acq(&_cnode_lock);
-	if (!cnode_is_null(dst)) {
-		status = EXCPT_COLLISION;
-	} else if (cnode_is_null(src)) {
-		status = EXCPT_EMPTY;
-	} else {
-		status = EXCPT_NONE;
-		// Fix the links
-		cnode_handle_t next = cnode_next(src);
-		cnode_handle_t prev = cnode_prev(src);
-		cnode_setnext(dst, next);
-		cnode_setprev(dst, prev);
-		cnode_setnext(prev, dst);
-		cnode_setprev(next, dst);
-		// Set the capability
-		cnode_setcap(dst, cnode_cap(src));
-	}
-	tl_rel(&_cnode_lock);
-	return status;
+	if (cnode_is_null(src) || !cnode_is_null(dst))
+		return false;
+	cnode_handle_t next = cnode_next(src);
+	cnode_handle_t prev = cnode_prev(src);
+	cnode_set_next(dst, next);
+	cnode_set_prev(dst, prev);
+	cnode_set_next(prev, dst);
+	cnode_set_prev(next, dst);
+	cnode_set_cap(dst, cnode_cap(src));
+	return true;
 }
 
-excpt_t cnode_delete(cnode_handle_t node)
+bool cnode_delete(cnode_handle_t node)
 {
-	excpt_t status;
-	tl_acq(&_cnode_lock);
-	if (cnode_is_null(node)) {
-		status = EXCPT_EMPTY;
-	} else {
-		status = EXCPT_NONE;
-		cnode_handle_t next = cnode_next(node);
-		cnode_handle_t prev = cnode_prev(node);
-		cnode_setprev(next, prev);
-		cnode_setprev(prev, next);
-		cnode_setcap(node, CAP_NONE);
-	}
-	tl_rel(&_cnode_lock);
-	return status;
+	if (cnode_is_null(node))
+		return false;
+	cnode_handle_t next = cnode_next(node);
+	cnode_handle_t prev = cnode_prev(node);
+	cnode_set_prev(next, prev);
+	cnode_set_prev(prev, next);
+	cnode_set_cap(node, CAP_NONE);
+	return true;
 }
 
-excpt_t cnode_delete_if(cnode_handle_t node, cap_t cap, cnode_handle_t prev)
+bool cnode_delete_if(cnode_handle_t node, cap_t cap, cnode_handle_t prev)
 {
-	excpt_t status;
-	tl_acq(&_cnode_lock);
-	if (cnode_is_null(node)) {
-		status = EXCPT_EMPTY;
-	} else if (cnode_prev(node) != prev || cnode_cap(node).raw != cap.raw) {
-		status = EXCPT_UNSPECIFIED;
-	} else {
-		status = EXCPT_NONE;
-		cnode_handle_t next = cnode_next(node);
-		cnode_setprev(next, prev);
-		cnode_setnext(prev, next);
-		cnode_setcap(node, CAP_NONE);
-	}
-	tl_rel(&_cnode_lock);
-	return status;
+	if (cnode_prev(node) != prev || cnode_cap(node).raw != cap.raw)
+		return false;
+	return cnode_delete(node);
 }

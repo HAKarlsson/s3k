@@ -19,6 +19,24 @@
 
 #define PMP_COUNT 8
 
+/** Process state flags
+ * PSF_BUSY: Some core
+ * PSF_BLOCK: Waiting for IPC.
+ * PSF_SUSPEND: Waiting for monitor
+ */
+#define PSF_BUSY 1
+#define PSF_BLOCK 2
+#define PSF_SUSPEND 4
+#define PSF_WAITING 8
+
+/** Process states */
+#define PS_READY 0
+#define PS_RUNNING 1
+#define PS_BLOCKED 2
+#define PS_BLOCKED_BUSY 3
+#define PS_SUSPENDED 4
+#define PS_SUSPENDED_BUSY 5
+
 typedef struct regs {
 	uint64_t pc;
 	uint64_t ra, sp, gp, tp;
@@ -136,6 +154,10 @@ bool proc_ipc_acquire(proc_t *proc, uint64_t channel_id);
  *
  * @param proc Pointer to the process for which we load PMP settings.
  */
-void proc_load_pmp(const proc_t *proc);
+void proc_pmp_load(const proc_t *proc);
+
+void proc_pmp_set(proc_t *proc, uint64_t i, uint64_t addr, uint64_t rwx);
+void proc_pmp_clear(proc_t *proc, uint64_t i);
+bool proc_pmp_is_set(proc_t *proc, uint64_t i);
 
 #endif /* __PROC_H__ */

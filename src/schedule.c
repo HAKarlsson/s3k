@@ -13,7 +13,7 @@
 
 #define NONE_PID 0xFF
 
-static volatile struct sched_entry _schedule[NHART][NSLICE];
+static volatile struct sched_entry _schedule[HART_COUNT][SLICE_COUNT];
 
 struct sched_entry schedule_get(uint64_t hartid, size_t quantum)
 {
@@ -21,7 +21,7 @@ struct sched_entry schedule_get(uint64_t hartid, size_t quantum)
 	return entry;
 }
 
-void schedule_update(uint64_t hartid, uint64_t pid, uint64_t begin,
+void schedule_update(uint64_t pid, uint64_t hartid, uint64_t begin,
 		     uint64_t end)
 {
 	for (uint64_t i = begin; i < end; i++)
@@ -30,7 +30,8 @@ void schedule_update(uint64_t hartid, uint64_t pid, uint64_t begin,
 
 void schedule_delete(uint64_t hartid, uint64_t begin, uint64_t end)
 {
-	schedule_update(hartid, NONE_PID, begin, end);
+	for (uint64_t i = begin; i < end; i++)
+		_schedule[hartid][i] = (struct sched_entry){ NONE_PID, 0 };
 }
 
 void schedule_next()
@@ -44,10 +45,10 @@ void schedule_next()
 
 retry:
 	// Get the quantum.
-	quantum = (time_get() + NSLACK) / NTICK;
+	quantum = (time_get() + SLICE_COUNT) / SLICE_LENGTH;
 
 	// Get the scheduled process
-	entry = schedule_get(hartid, quantum % NSLICE);
+	entry = schedule_get(hartid, quantum % SLICE_COUNT);
 
 	// If invalid, go back
 	if (entry.pid == NONE_PID)
@@ -57,8 +58,8 @@ retry:
 	current = proc_get(entry.pid);
 
 	// Calculate start and end time.
-	start_time = quantum * NTICK;
-	end_time = start_time + entry.len * NTICK - NSLACK;
+	start_time = quantum * SLICE_LENGTH;
+	end_time = start_time + entry.len * SLICE_LENGTH - SLACK_LENGTH;
 
 	// Check if process is sleeping.
 	if (current->sleep > end_time)
@@ -69,7 +70,7 @@ retry:
 		start_time = current->sleep;
 
 	// Setup the PMP.
-	proc_load_pmp(current);
+	proc_pmp_load(current);
 
 	// Temporary fix, QEMU does not allow this to be zero.
 	if (!csrr_pmpcfg0())
@@ -98,6 +99,7 @@ void schedule_yield(void)
 
 void schedule_init(void)
 {
-	for (int i = MIN_HARTID; i <= MAX_HARTID; i++)
-		schedule_update(i, 0, 0, NSLICE);
+	for (int i = MIN_HARTID; i <= MAX_HARTID; i++) {
+		schedule_update(0, i, 0, SLICE_COUNT);
+	}
 }

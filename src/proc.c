@@ -6,12 +6,12 @@
 #include "kassert.h"
 #include "ticket_lock.h"
 
-static proc_t _processes[NPROC];
+static proc_t _processes[PROC_COUNT];
 extern unsigned char _payload[];
 
 void proc_init(void)
 {
-	for (int i = 0; i < NPROC; i++) {
+	for (int i = 0; i < PROC_COUNT; i++) {
 		_processes[i].pid = i;
 		_processes[i].state = PS_SUSPENDED;
 	}
@@ -21,7 +21,7 @@ void proc_init(void)
 
 proc_t *proc_get(uint64_t pid)
 {
-	kassert(pid < NPROC);
+	kassert(pid < PROC_COUNT);
 	return &_processes[pid];
 }
 
@@ -82,7 +82,7 @@ bool proc_ipc_acquire(proc_t *proc, uint64_t channel_id)
 	return proc_acquire(proc, expected);
 }
 
-void proc_load_pmp(const proc_t *proc)
+void proc_pmp_load(const proc_t *proc)
 {
 	uint64_t pmpcfg0 = *(uint64_t *)proc->pmpcfg;
 	uint64_t pmpaddr0 = proc->pmpaddr[0];
@@ -102,4 +102,20 @@ void proc_load_pmp(const proc_t *proc)
 	csrw_pmpaddr5(pmpaddr5);
 	csrw_pmpaddr6(pmpaddr6);
 	csrw_pmpaddr7(pmpaddr7);
+}
+
+void proc_pmp_set(proc_t *proc, uint64_t i, uint64_t addr, uint64_t rwx)
+{
+	proc->pmpcfg[i] = addr | 0x18;
+	proc->pmpaddr[i] = rwx;
+}
+
+void proc_pmp_clear(proc_t *proc, uint64_t i)
+{
+	proc->pmpcfg[i] = 0;
+}
+
+bool proc_pmp_is_set(proc_t *proc, uint64_t i)
+{
+	return proc->pmpcfg[i] != 0;
 }

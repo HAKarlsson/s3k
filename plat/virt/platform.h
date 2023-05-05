@@ -5,7 +5,7 @@
 #define MIN_HARTID 0
 #define MAX_HARTID 3
 // Harts 0,1,2,3
-#define NHART 4
+#define HART_COUNT 4
 
 // RTC ticks per second
 #define TICKS_PER_SECOND 1000000ull
