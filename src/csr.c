@@ -3,21 +3,24 @@
 uint64_t csrr_mhartid(void)
 {
 	uint64_t val;
-	__asm__ volatile("csrr %0,mhartid" : "=r"(val));
+	__asm__ volatile("csrr %0,mhartid"
+			 : "=r"(val));
 	return val;
 }
 
 uint64_t csrr_mip(void)
 {
 	uint64_t val;
-	__asm__ volatile("csrr %0,mip" : "=r"(val));
+	__asm__ volatile("csrr %0,mip"
+			 : "=r"(val));
 	return val;
 }
 
 uint64_t csrr_pmpcfg0(void)
 {
 	uint64_t val;
-	__asm__ volatile("csrr %0,pmpcfg0" : "=r"(val));
+	__asm__ volatile("csrr %0,pmpcfg0"
+			 : "=r"(val));
 	return val;
 }
 
@@ -29,56 +32,64 @@ void csrw_pmpcfg0(uint64_t val)
 uint64_t csrr_pmpaddr0(void)
 {
 	uint64_t val;
-	__asm__ volatile("csrr %0,pmpaddr0" : "=r"(val));
+	__asm__ volatile("csrr %0,pmpaddr0"
+			 : "=r"(val));
 	return val;
 }
 
 uint64_t csrr_pmpaddr1(void)
 {
 	uint64_t val;
-	__asm__ volatile("csrr %0,pmpaddr1" : "=r"(val));
+	__asm__ volatile("csrr %0,pmpaddr1"
+			 : "=r"(val));
 	return val;
 }
 
 uint64_t csrr_pmpaddr2(void)
 {
 	uint64_t val;
-	__asm__ volatile("csrr %0,pmpaddr2" : "=r"(val));
+	__asm__ volatile("csrr %0,pmpaddr2"
+			 : "=r"(val));
 	return val;
 }
 
 uint64_t csrr_pmpaddr3(void)
 {
 	uint64_t val;
-	__asm__ volatile("csrr %0,pmpaddr3" : "=r"(val));
+	__asm__ volatile("csrr %0,pmpaddr3"
+			 : "=r"(val));
 	return val;
 }
 
 uint64_t csrr_pmpaddr4(void)
 {
 	uint64_t val;
-	__asm__ volatile("csrr %0,pmpaddr4" : "=r"(val));
+	__asm__ volatile("csrr %0,pmpaddr4"
+			 : "=r"(val));
 	return val;
 }
 
 uint64_t csrr_pmpaddr5(void)
 {
 	uint64_t val;
-	__asm__ volatile("csrr %0,pmpaddr5" : "=r"(val));
+	__asm__ volatile("csrr %0,pmpaddr5"
+			 : "=r"(val));
 	return val;
 }
 
 uint64_t csrr_pmpaddr6(void)
 {
 	uint64_t val;
-	__asm__ volatile("csrr %0,pmpaddr6" : "=r"(val));
+	__asm__ volatile("csrr %0,pmpaddr6"
+			 : "=r"(val));
 	return val;
 }
 
 uint64_t csrr_pmpaddr7(void)
 {
 	uint64_t val;
-	__asm__ volatile("csrr %0,pmpaddr7" : "=r"(val));
+	__asm__ volatile("csrr %0,pmpaddr7"
+			 : "=r"(val));
 	return val;
 }
 

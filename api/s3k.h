@@ -20,9 +20,9 @@
 /// @{
 
 #define S3K_RWX 0x7 ///< Read, write and execute for Memory and PMP capability
-#define S3K_RW 0x3 ///< Read and write permissions for memory and PMP capability
+#define S3K_RW 0x3  ///< Read and write permissions for memory and PMP capability
 #define S3K_RX \
-	0x5 ///< Read and execute permissions for memory and PMP capability
+	0x5	  ///< Read and execute permissions for memory and PMP capability
 #define S3K_R 0x1 ///< Read permissions for memory and PMP capability
 
 /**
@@ -147,15 +147,15 @@ union s3k_cap {
 		uint64_t unused : 4; ///< Padding, should be zero.
 		uint64_t hartid : 8; ///< Hardware Thread ID.
 		uint64_t begin : 16; ///< Beginning of time slice.
-		uint64_t free : 16; ///< Beginning of available/unallocated time
-				    ///< slice.
-		uint64_t end : 16;  ///< End of time slice.
+		uint64_t free : 16;  ///< Beginning of available/unallocated time
+				     ///< slice.
+		uint64_t end : 16;   ///< End of time slice.
 	} time;
 
 	struct {
 		uint64_t type : 4;
-		uint64_t lock : 1; ///< Prevents creating of memory capabilities
-		uint64_t rwx : 3;  ///< Read, write and execute (reverse order)
+		uint64_t lock : 1;   ///< Prevents creating of memory capabilities
+		uint64_t rwx : 3;    ///< Read, write and execute (reverse order)
 		uint64_t offset : 8; ///< 128 MiB offset of memory slice
 		uint64_t begin : 16; ///< Beginning of memory slice
 		uint64_t free : 16;  ///< Beginning of available/unallocated
@@ -165,16 +165,18 @@ union s3k_cap {
 
 	struct {
 		uint64_t type : 4;
-		uint64_t addr : 52; ///< pmpaddr
-		uint64_t cfg : 8;   ///< pmpcfg
+		uint64_t rwx : 3;
+		uint64_t used : 1;
+		uint64_t index : 4;
+		uint64_t addr : 48;
 	} pmp;
 
 	struct {
 		uint64_t type : 4;
 		uint64_t unused : 12; ///< Padding, should be zero
 		uint64_t begin : 16;  ///< Beginning of monitored PIDs.
-		uint64_t free : 16; ///< Beginning of available monitored PIDs.
-		uint64_t end : 16;  ///< End of monitred PIDs
+		uint64_t free : 16;   ///< Beginning of available monitored PIDs.
+		uint64_t end : 16;    ///< End of monitred PIDs
 	} monitor;
 
 	struct {
@@ -210,7 +212,10 @@ _Static_assert(sizeof(union s3k_cap) == 8, "sizeof(union s3k_cap) != 8");
 /// S3K Syscall Numbers
 enum s3k_syscall_nr {
 	// Capabilityless syscalls
-	S3K_SYSCALL_PROC, ///< Process local system call.
+	S3K_SYSCALL_GETINFO, ///< Process local system call.
+	S3K_SYSCALL_GETREG,  ///< Process local system call.
+	S3K_SYSCALL_SETREG,  ///< Process local system call.
+	S3K_SYSCALL_YIELD,   ///< Process local system call.
 	// Capability syscalls
 	S3K_SYSCALL_GETCAP, ///< Get capability description
 	S3K_SYSCALL_MOVCAP, ///< Move capability
@@ -225,6 +230,9 @@ enum s3k_syscall_nr {
 	S3K_SYSCALL_MGETCAP,  ///< Monitor get capability description
 	S3K_SYSCALL_MTAKECAP, ///< Monitor take capability
 	S3K_SYSCALL_MGIVECAP, ///< Monitor give capability
+	// PMP syscalls
+	S3K_SYSCALL_PMPSET,
+	S3K_SYSCALL_PMPCLEAR,
 	// IPC syscalls
 	S3K_SYSCALL_RECV,     ///< Receive message/capability
 	S3K_SYSCALL_SEND,     ///< Send message/capability
@@ -260,7 +268,7 @@ uint64_t s3k_gettimeout(void);
  *
  * @param reg Register ID.
  * @return Read value.
- * @warning Register IDs that are out-of-range are silently ignored.
+ * @warning Register IDs that are out-of-range returns 0
  */
 uint64_t s3k_getreg(enum s3k_reg reg);
 
@@ -269,10 +277,9 @@ uint64_t s3k_getreg(enum s3k_reg reg);
  *
  * @param reg Register ID.
  * @param val Value to write.
- * @return Read value.
  * @warning Register IDs that are out-of-range are silently ignored.
  */
-uint64_t s3k_setreg(enum s3k_reg reg, uint64_t val);
+void s3k_setreg(enum s3k_reg reg, uint64_t val);
 
 /**
  * @brief Yield remaining time slice.
@@ -285,7 +292,7 @@ void s3k_yield(void);
  * @param i Index of capability table.
  * @return The read capability.
  */
-union s3k_cap s3k_getcap(uint64_t i);
+enum s3k_excpt s3k_getcap(uint64_t i, union s3k_cap *cap);
 
 /**
  * @brief Moves a capability.

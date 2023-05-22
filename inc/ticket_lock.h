@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file lock.h
  *
@@ -12,9 +13,6 @@
  * @copyright MIT License
  * @author Henrik Karlsson (henrik10@kth.se)
  */
-#ifndef __TICKET_LOCK_H__
-#define __TICKET_LOCK_H__
-
 #include <stdint.h>
 
 typedef struct {
@@ -32,12 +30,10 @@ typedef struct {
 static inline void tl_acq(ticket_lock_t *lock)
 {
 	// Increment next ticket number and return the previous value
-	unsigned long ticket
-	    = __atomic_fetch_add(&lock->next_ticket, 1, __ATOMIC_RELAXED);
+	unsigned long ticket = __atomic_fetch_add(&lock->next_ticket, 1, __ATOMIC_RELAXED);
 
 	// Wait until our ticket number is being served
-	while (__atomic_load_n(&lock->serving_ticket, __ATOMIC_ACQUIRE)
-	       != ticket) {
+	while (__atomic_load_n(&lock->serving_ticket, __ATOMIC_ACQUIRE) != ticket) {
 		// Wait until our ticket number is being served
 	}
 }
@@ -52,5 +48,3 @@ static inline void tl_rel(ticket_lock_t *lock)
 	// Atomically increment the serving ticket number
 	__atomic_fetch_add(&lock->serving_ticket, 1, __ATOMIC_RELEASE);
 }
-
-#endif /* __TICKET_LOCK_H__ */

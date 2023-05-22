@@ -8,7 +8,7 @@ PROGRAM?=s3k
 CONFIG_H?=config.h
 
 # Platform
-PLATFORM?=plat/virt
+PLATFORM?=virt
 
 # Build directory
 BUILD?=build
@@ -20,13 +20,14 @@ RISCV_PREFIX?=riscv64-unknown-elf-
 CC=${RISCV_PREFIX}gcc
 SIZE=${RISCV_PREFIX}size
 OBJDUMP=${RISCV_PREFIX}objdump
+OBJCOPY=${RISCV_PREFIX}objcopy
 
 # Compilation flags
 ARCH=rv64imaczicsr
 ABI=lp64
 CMODEL=medany
 
-INC =-include ${PLATFORM}/platform.h -include ${CONFIG_H} -Iinc -I${PLATFORM}
+INC =-include plat/${PLATFORM}/platform.h -include ${CONFIG_H} -Iinc -Iplat/${PLATFORM}
 CFLAGS =-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL} \
         -std=c11 \
 	-Wall -Wextra -Werror \
@@ -49,18 +50,20 @@ LDFLAGS=-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL} \
 	-fno-stack-protector \
 	-Wl,--gc-sections \
 	-flto \
-	-T${PLATFORM}/linker.ld
+	-Tplat/${PLATFORM}/linker.ld
 
 # Sources
 vpath %.c src
 vpath %.S src
 
-SRCS=head.S trap.S cnode.c csr.c current.c exception.c proc.c \
-     schedule.c syscall.c timer.c wfi.c altio.c kassert.c preemption.c
+SRCS=head.S trap.S csr.c current.c exception.c proc.c \
+     cap_table.c cap_operations.c cap_utils.c \
+     info.c ipc.c schedule.c syscall.c wfi.c altio.c kassert.c preemption.c
 OBJS=${patsubst %.S, ${BUILD}/%.o, ${patsubst %.c, ${BUILD}/%.o, ${SRCS}}}
 DEPS=${OBJS:.o=.d}
 
 ELF=${BUILD}/${PROGRAM}.elf
+BIN=${BUILD}/${PROGRAM}.bin
 DA=${BUILD}/${PROGRAM}.da
 
 all: options kernel dasm size
@@ -75,12 +78,14 @@ options:
 	@printf "CONFIG_H  = ${abspath ${CONFIG_H}}\n"
 	@printf "BUILD     = ${abspath ${BUILD}}\n"
 
-kernel: ${ELF}
+elf: ${ELF}
+
+bin: ${BIN}
 
 dasm: ${DA}
 
 size: ${ELF}
-	@printf "SIZE ${@F}\n"
+	@printf "SIZE ${<F}\n"
 	@${SIZE} $<
 
 format:
@@ -103,6 +108,10 @@ ${BUILD}/%.o: %.c | ${BUILD}
 ${BUILD}/%.elf: ${OBJS}
 	@printf "CC ${@F}\n"
 	@${CC} ${LDFLAGS} -o $@ $^
+
+${BUILD}/%.bin: ${OBJS}
+	@printf "OBJCOPY ${@F}\n"
+	@${OBJCOPY} -O binary $< $@
 
 ${BUILD}/%.da: ${BUILD}/%.elf
 	@printf "OBJDUMP ${@F}\n"

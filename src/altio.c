@@ -1,20 +1,17 @@
 #include "altio.h"
 
-#include <stdarg.h>
+#include "uart.h"
 
-extern volatile char _uart[];
+#include <stdarg.h>
 
 int alt_getchar(void)
 {
-	while (!(_uart[5] & 1))
-		;
-	return _uart[0];
+	return uart_getchar();
 }
 
 int alt_putchar(char c)
 {
-	_uart[0] = c;
-	return c;
+	return uart_putchar(c);
 }
 
 int alt_putstr(const char *str)

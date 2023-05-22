@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file proc.h
  * @brief Defines the process control block and its associated functions.
@@ -9,15 +10,13 @@
  * @copyright MIT License
  * @author Henrik Karlsson (henrik10@kth.se)
  */
-#ifndef __PROC_H__
-#define __PROC_H__
 
 #include "ticket_lock.h"
 
 #include <stdbool.h>
 #include <stdint.h>
 
-#define PMP_COUNT 8
+#define NUM_OF_PMP 8
 
 /** Process state flags
  * PSF_BUSY: Some core
@@ -37,21 +36,47 @@
 #define PS_SUSPENDED 4
 #define PS_SUSPENDED_BUSY 5
 
-typedef struct regs {
-	uint64_t pc;
-	uint64_t ra, sp, gp, tp;
-	uint64_t t0, t1, t2;
-	uint64_t s0, s1;
-	uint64_t a0, a1, a2, a3, a4, a5, a6, a7;
-	uint64_t s2, s3, s4, s5, s6, s7, s8, s9;
-	uint64_t s10, s11;
-	uint64_t t3, t4, t5, t6;
-	uint64_t tpc, tsp;
-	uint64_t epc, esp;
-	uint64_t ecause, eval;
+typedef enum {
+	REG_PC,
+	REG_RA,
+	REG_SP,
+	REG_GP,
+	REG_TP,
+	REG_T0,
+	REG_T1,
+	REG_T2,
+	REG_S0,
+	REG_S1,
+	REG_A0,
+	REG_A1,
+	REG_A2,
+	REG_A3,
+	REG_A4,
+	REG_A5,
+	REG_A6,
+	REG_A7,
+	REG_S2,
+	REG_S3,
+	REG_S4,
+	REG_S5,
+	REG_S6,
+	REG_S7,
+	REG_S8,
+	REG_S9,
+	REG_S10,
+	REG_S11,
+	REG_T3,
+	REG_T4,
+	REG_T5,
+	REG_T6,
+	REG_TPC,
+	REG_TSP,
+	REG_EPC,
+	REG_ESP,
+	REG_ECAUSE,
+	REG_EVAL,
+	NUM_OF_REGS
 } regs_t;
-
-#define REG_COUNT (sizeof(struct regs) / sizeof(uint64_t))
 
 /**
  * @brief Process control block.
@@ -61,16 +86,18 @@ typedef struct regs {
 typedef struct {
 	/** The registers of the process (RISC-V registers and virtual
 	 * registers). */
-	regs_t regs;
+	uint64_t regs[NUM_OF_REGS];
 	/** PMP settings */
-	uint8_t pmpcfg[PMP_COUNT];
-	uint64_t pmpaddr[PMP_COUNT];
+	uint8_t pmpcfg[NUM_OF_PMP];
+	uint64_t pmpaddr[NUM_OF_PMP];
 	/** Process ID. */
 	uint64_t pid;
 	/** Process state. */
 	uint64_t state;
 	/** Sleep until. */
 	uint64_t sleep;
+	uint64_t start_time;
+	uint64_t end_time;
 } proc_t;
 
 /**
@@ -102,7 +129,9 @@ proc_t *proc_get(uint64_t pid);
  * @param expected The expected value of the process's state.
  * @return True if the lock was successfully acquired, false otherwise.
  */
-bool proc_acquire(proc_t *proc, uint64_t expected);
+bool proc_acquire(proc_t *proc);
+
+bool proc_monitor_acquire(proc_t *proc);
 
 /**
  * @brief Release the lock on a process.
@@ -144,20 +173,6 @@ bool proc_ipc_wait(proc_t *proc, uint64_t channel_id);
  */
 bool proc_ipc_acquire(proc_t *proc, uint64_t channel_id);
 
-/**
- * @brief Loads the PMP settings of the process to the hardware.
- *
- * This function loads the PMP settings of the process to the hardware. The PMP
- * settings specify the memory regions that the process can access. This
- * function loads the PMP settings to the hardware so that the hardware enforces
- * the process's memory access permissions.
- *
- * @param proc Pointer to the process for which we load PMP settings.
- */
-void proc_pmp_load(const proc_t *proc);
-
-void proc_pmp_set(proc_t *proc, uint64_t i, uint64_t addr, uint64_t rwx);
-void proc_pmp_clear(proc_t *proc, uint64_t i);
-bool proc_pmp_is_set(proc_t *proc, uint64_t i);
-
-#endif /* __PROC_H__ */
+void proc_pmp_set(proc_t *proc, uint64_t index, uint64_t addr, uint64_t rwx);
+void proc_pmp_clear(proc_t *proc, uint64_t index);
+bool proc_pmp_is_set(proc_t *proc, uint64_t index);

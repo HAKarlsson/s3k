@@ -1,5 +1,4 @@
-#ifndef __PMP_H__
-#define __PMP_H__
+#pragma once
 
 #include <stdint.h>
 
@@ -12,5 +11,3 @@ static inline uint64_t pmp_napot_end(uint64_t addr)
 {
 	return (((addr + 1) | addr) + 1) << 2;
 }
-
-#endif /* __PMP_H__ */

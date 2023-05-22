@@ -4,7 +4,7 @@ UseTab: Always
 TabWidth: 8
 IndentWidth: 8
 ContinuationIndentWidth: 4
-ColumnLimit: 80
+ColumnLimit: 0
 
 AlignAfterOpenBracket: Align
 AlignConsecutiveAssignments: false
@@ -71,3 +71,9 @@ PenaltyReturnTypeOnItsOwnLine: 60
 
 SortIncludes: true
 IncludeBlocks: Regroup
+BasedOnStyle: LLVM
+IndentWidth: 8
+UseTab: Always
+BreakBeforeBraces: Linux
+AllowShortIfStatementsOnASingleLine: false
+IndentCaseLabels: false

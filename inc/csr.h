@@ -1,12 +1,10 @@
+#pragma once
 /**
  * @file csr.h
  * @brief Interact with control and status registers.
  * @copyright MIT License
  * @author Henrik Karlsson (henrik10@kth.se)
  */
-#ifndef __CSR_H__
-#define __CSR_H__
-
 #include <stdint.h>
 
 /**
@@ -148,5 +146,3 @@ void csrw_pmpaddr6(uint64_t val);
  * @param val the value to write to the pmpaddr4 register.
  */
 void csrw_pmpaddr7(uint64_t val);
-
-#endif /* __CSR_H__ */

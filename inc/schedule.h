@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file sched.h
  * @brief Scheduler.
@@ -6,20 +7,12 @@
  * @bug QEMU mret does not work properly if all pmp registers are 0, so we have
  * a temporary fix in sched_next.
  */
-#ifndef __SCHED_H__
-#define __SCHED_H__
 
-#include "cnode.h"
 #include "common.h"
 #include "proc.h"
 
 #include <stddef.h>
 #include <stdint.h>
-
-struct sched_entry {
-	uint8_t pid;
-	uint8_t len;
-};
 
 /**
  * @brief Get the scheduling entry.
@@ -30,7 +23,7 @@ struct sched_entry {
  * @param i Index of the schedule entry.
  * @return Schedule entry (process ID and length of time slice).
  */
-struct sched_entry schedule_get(uint64_t hartid, size_t i);
+proc_t *schedule_get(uint64_t hartid, uint64_t curren_time, uint64_t *start_time, uint64_t *end_time);
 
 /**
  * @brief Initialize the scheduler.
@@ -42,31 +35,16 @@ struct sched_entry schedule_get(uint64_t hartid, size_t i);
 void schedule_init(void);
 
 /**
- * @brief Yield the current time slice for a given process.
- *
- * This function yields the current time slice for a given process. It marks
- * the process as being suspended and schedules the next available process
- * to run. When the yielded process is scheduled again, it will resume
- * execution from where it left off.
- *
- * @param proc Pointer to the process for which the time slice should be
- *             yielded.
- */
-void schedule_yield(void);
-
-/**
  * @brief Find the next process to schedule.
  *
  * This function finds the next process to schedule based on the current
  * state of the system.
  */
-void schedule_next(void);
+void schedule_yield(void);
+void schedule(void);
 
 /// Delete scheduling at hartid, begin-end.
-void schedule_delete(uint64_t hartid, uint64_t begin, uint64_t end);
+void schedule_delete(uint64_t hartid, uint64_t from, uint64_t to);
 
 /// Let pid run on hartid, begin-end.
-void schedule_update(uint64_t pid, uint64_t hartid, uint64_t begin,
-		     uint64_t end);
-
-#endif /* __SCHED_H__ */
+void schedule_update(uint64_t pid, uint64_t end, uint64_t hartid, uint64_t from, uint64_t to);

@@ -1,12 +1,10 @@
+#pragma once
 /**
  * @file exception.h
  * @brief User exception handler
  * @copyright MIT License
  * @author Henrik Karlsson (henrik10@kth.se)
  */
-
-#ifndef __EXCEPTION_H__
-#define __EXCEPTION_H__
 
 #include "proc.h"
 
@@ -25,6 +23,4 @@
  * @param mepc  The value of the mepc register
  * @param mtval  The value of the mtval register
  */
-void handle_exception(uint64_t mcause, uint64_t mepc, uint64_t mtval);
-
-#endif /* __EXCEPTION_H__ */
+void exception_handler(uint64_t mcause, uint64_t mepc, uint64_t mtval);

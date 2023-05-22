@@ -15,8 +15,8 @@ namespace
 class SyscallTest : public ::testing::Test
 {
       private:
-	static constexpr union cap caps[]
-	    = { CAP_PMP(0x20005FFF, CAP_RWX),
+	static constexpr union cap caps[] = {
+		CAP_PMP(0x20005FFF, CAP_RWX),
 		CAP_MEMORY(0x0020, 0X8000, 0x10, CAP_RWX),
 		CAP_MEMORY(0x0000, 0X0001, 0x2, CAP_RW),
 		CAP_TIME(0, 0, NSLICE),
@@ -24,7 +24,8 @@ class SyscallTest : public ::testing::Test
 		CAP_TIME(2, 0, NSLICE),
 		CAP_TIME(3, 0, NSLICE),
 		CAP_MONITOR(0, NPROC),
-		CAP_CHANNEL(0, NCHANNEL) };
+		CAP_CHANNEL(0, NCHANNEL)
+	};
 
       protected:
 	SyscallTest()

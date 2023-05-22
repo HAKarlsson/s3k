@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file kassert.h
  *
@@ -13,9 +14,6 @@
  * @copyright MIT License
  * @author Henrik Karlsson (henrik10@kth.se)
  */
-#ifndef __KASSERT_H__
-#define __KASSERT_H__
-
 #ifdef NDEBUG
 
 #define kassert(expr)                            \
@@ -55,5 +53,3 @@ void kassert_failure(const char *file, unsigned long line, const char *expr);
 	} while (false)
 
 #endif /* NDEBUG */
-
-#endif /* __KASSERT_H__ */

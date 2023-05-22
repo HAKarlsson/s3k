@@ -13,9 +13,10 @@ namespace
 class ProcTest : public ::testing::Test
 {
       private:
-	static constexpr union cap caps[]
-	    = { CAP_PMP(0x205fff, CAP_RWX), CAP_PMP(0x305fff, CAP_RX),
-		CAP_PMP(0x405fff, CAP_RW), CAP_PMP(0x505fff, CAP_R) };
+	static constexpr union cap caps[] = {
+		CAP_PMP(0x205fff, CAP_RWX), CAP_PMP(0x305fff, CAP_RX),
+		CAP_PMP(0x405fff, CAP_RW), CAP_PMP(0x505fff, CAP_R)
+	};
 
       protected:
 	ProcTest()

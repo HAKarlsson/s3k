@@ -37,11 +37,29 @@
 #define T5_OFFSET 240
 #define T6_OFFSET 248
 
+#define	TPC_OFFSET 256
+#define TSP_OFFSET 264
+#define	EPC_OFFSET 272
+#define ESP_OFFSET 280
+#define	ECAUSE_OFFSET 288
+#define EVAL_OFFSET 296
+
+#define PMPCFG0_OFFSET 304
+#define PMPADDR0_OFFSET 312
+#define PMPADDR1_OFFSET 320
+#define PMPADDR2_OFFSET 328
+#define PMPADDR3_OFFSET 336
+#define PMPADDR4_OFFSET 344
+#define PMPADDR5_OFFSET 352
+#define PMPADDR6_OFFSET 360
+#define PMPADDR7_OFFSET 368
+
 #define USER_ECALL 8
 #define MSTATUS_MIE 8
-#define SYSCALL_COUNT 10
+#define NUM_OF_SYSCALL 10
 
 .globl trap_entry
+.globl trap_schedule_exit
 .globl trap_exit
 
 .type trap_entry, @function
@@ -77,50 +95,31 @@ trap_entry:
         /* save user tp to scratch, load PCB */
 	csrrw tp, mscratch, tp
 
-machine_interrupt:
-        /* scratch == 0, then exception/interrupt in kernel */
-	bnez  tp, save_context
-        csrrw tp, mscratch, tp
-        j     2f
-
-save_context:
         /* save user registers (except tp and pc) */
-	sd    ra, (RA_OFFSET)(tp)
-	sd    sp, (SP_OFFSET)(tp)
-	sd    gp, (GP_OFFSET)(tp)
-	sd    t0, (T0_OFFSET)(tp)
-	sd    t1, (T1_OFFSET)(tp)
-	sd    t2, (T2_OFFSET)(tp)
-	sd    s0, (S0_OFFSET)(tp)
-	sd    s1, (S1_OFFSET)(tp)
-	sd    a0, (A0_OFFSET)(tp)
-	sd    a1, (A1_OFFSET)(tp)
-	sd    a2, (A2_OFFSET)(tp)
-	sd    a3, (A3_OFFSET)(tp)
-	sd    a4, (A4_OFFSET)(tp)
-	sd    a5, (A5_OFFSET)(tp)
-	sd    a6, (A6_OFFSET)(tp)
-	sd    a7, (A7_OFFSET)(tp)
-	sd    s2, (S2_OFFSET)(tp)
-	sd    s3, (S3_OFFSET)(tp)
-	sd    s4, (S4_OFFSET)(tp)
-	sd    s5, (S5_OFFSET)(tp)
-	sd    s6, (S6_OFFSET)(tp)
-	sd    s7, (S7_OFFSET)(tp)
-	sd    s8, (S8_OFFSET)(tp)
-	sd    s9, (S9_OFFSET)(tp)
-	sd    s10,(S10_OFFSET)(tp)
-	sd    s11,(S11_OFFSET)(tp)
-	sd    t3, (T3_OFFSET)(tp)
-	sd    t4, (T4_OFFSET)(tp)
-	sd    t5, (T5_OFFSET)(tp)
-	sd    t6, (T6_OFFSET)(tp)
+	sd    ra, RA_OFFSET(tp)
+	sd    sp, SP_OFFSET(tp)
+	sd    gp, GP_OFFSET(tp)
+	sd    t0, T0_OFFSET(tp)
+	sd    t1, T1_OFFSET(tp)
+	sd    t2, T2_OFFSET(tp)
+	sd    a0, A0_OFFSET(tp)
+	sd    a1, A1_OFFSET(tp)
+	sd    a2, A2_OFFSET(tp)
+	sd    a3, A3_OFFSET(tp)
+	sd    a4, A4_OFFSET(tp)
+	sd    a5, A5_OFFSET(tp)
+	sd    a6, A6_OFFSET(tp)
+	sd    a7, A7_OFFSET(tp)
+	sd    t3, T3_OFFSET(tp)
+	sd    t4, T4_OFFSET(tp)
+	sd    t5, T5_OFFSET(tp)
+	sd    t6, T6_OFFSET(tp)
 
         /* save user pc and tp */
 	csrr  t1, mepc
-	csrrw t2, mscratch, zero
-	sd    t1, (PC_OFFSET)(tp)
-	sd    t2, (TP_OFFSET)(tp)
+	sd    t1, PC_OFFSET(tp)
+	csrrw t1, mscratch, zero
+	sd    t1, TP_OFFSET(tp)
 
 2:      
         /* Load the global and stack pointer of the kernel. */
@@ -137,67 +136,123 @@ save_context:
         lla   ra, trap_exit
 
 	/* If mcause < 0, then timer interrupt. */
-	bltz  t1, schedule_yield
-
+	bltz  t1, _yield
         /* Check if system call. */
 	li    t2, USER_ECALL
-	beq   t1, t2, syscall_handler
+	beq   t1, t2, _syscall
 
 _exception:
         /* Otherwise, it is exception. */
         csrr  a0, mcause
         csrr  a1, mepc
         csrr  a2, mtval
-        j     handle_exception
+        call  exception_handler
+        j     trap_exit
+
+_syscall:
+        // Jump to handler
+1:      auipc ra,%pcrel_hi(_syscall_table)
+        slli  t0,t0,2
+        add   ra,ra,t0
+        jalr  ra,%pcrel_lo(1b)
+        // If a0 < 0, then yield
+        sd    a0,T0_OFFSET(tp)
+        csrr  t0,mepc
+        addi  t0,t0,4
+        sd    t0,PC_OFFSET(tp)
+        bltz  a0,_yield
+        j     trap_exit
+
+_syscall_table:
+        .option push
+        .option norvc
+        j     syscall_get_info
+        j     syscall_get_reg
+        j     syscall_set_reg
+        j     syscall_yield
+        j     syscall_get_cap
+        j     syscall_move_cap
+        j     syscall_delete_cap
+        j     syscall_revoke_cap
+        j     syscall_derive_cap
+        j     syscall_pmp_set
+        j     syscall_pmp_clear
+        .option pop
+
+_yield:
+	sd    s0, S0_OFFSET(tp)
+	sd    s1, S1_OFFSET(tp)
+	sd    s2, S2_OFFSET(tp)
+	sd    s3, S3_OFFSET(tp)
+	sd    s4, S4_OFFSET(tp)
+	sd    s5, S5_OFFSET(tp)
+	sd    s6, S6_OFFSET(tp)
+	sd    s7, S7_OFFSET(tp)
+	sd    s8, S8_OFFSET(tp)
+	sd    s9, S9_OFFSET(tp)
+	sd    s10,S10_OFFSET(tp)
+	sd    s11,S11_OFFSET(tp)
+
+        call  schedule_yield
+
+trap_schedule_exit:
+
+	ld    s0, S0_OFFSET(tp)
+	ld    s1, S1_OFFSET(tp)
+	ld    s2, S2_OFFSET(tp)
+	ld    s3, S3_OFFSET(tp)
+	ld    s4, S4_OFFSET(tp)
+	ld    s5, S5_OFFSET(tp)
+	ld    s6, S6_OFFSET(tp)
+	ld    s7, S7_OFFSET(tp)
+	ld    s8, S8_OFFSET(tp)
+	ld    s9, S9_OFFSET(tp)
+	ld    s10,S10_OFFSET(tp)
+	ld    s11,S11_OFFSET(tp)
 
 trap_exit:
-        /* Set return to user-mode and enable preemption */
-        csrw  mstatus, MSTATUS_MIE
 
-	/* Load user pc to mepc. */
-	ld    t0,(PC_OFFSET)(tp)
+        /* Load PMP addresses */
+        ld    t0, PMPCFG0_OFFSET(tp)
+        ld    a0, PMPADDR0_OFFSET(tp)
+        ld    a1, PMPADDR1_OFFSET(tp)
+        ld    a2, PMPADDR2_OFFSET(tp)
+        ld    a3, PMPADDR3_OFFSET(tp)
+        ld    a4, PMPADDR4_OFFSET(tp)
+        ld    a5, PMPADDR5_OFFSET(tp)
+        ld    a6, PMPADDR6_OFFSET(tp)
+        ld    a7, PMPADDR7_OFFSET(tp)
+        csrw  pmpcfg0, t0
+        csrw  pmpaddr0, a0
+        csrw  pmpaddr1, a1
+        csrw  pmpaddr2, a2
+        csrw  pmpaddr3, a3
+        csrw  pmpaddr4, a4
+        csrw  pmpaddr5, a5
+        csrw  pmpaddr6, a6
+        csrw  pmpaddr7, a7
+
+        csrw  mstatus,x0
+	ld    t0, PC_OFFSET(tp)
 	csrw  mepc,t0
-
-	/* Load other user registers */
-	ld    ra, (RA_OFFSET)(tp)
-	ld    sp, (SP_OFFSET)(tp)
-	ld    gp, (GP_OFFSET)(tp)
-	ld    t0, (T0_OFFSET)(tp)
-	ld    t1, (T1_OFFSET)(tp)
-	ld    t2, (T2_OFFSET)(tp)
-	ld    s0, (S0_OFFSET)(tp)
-	ld    s1, (S1_OFFSET)(tp)
-	ld    a0, (A0_OFFSET)(tp)
-	ld    a1, (A1_OFFSET)(tp)
-	ld    a2, (A2_OFFSET)(tp)
-	ld    a3, (A3_OFFSET)(tp)
-	ld    a4, (A4_OFFSET)(tp)
-	ld    a5, (A5_OFFSET)(tp)
-	ld    a6, (A6_OFFSET)(tp)
-	ld    a7, (A7_OFFSET)(tp)
-	ld    s2, (S2_OFFSET)(tp)
-	ld    s3, (S3_OFFSET)(tp)
-	ld    s4, (S4_OFFSET)(tp)
-	ld    s5, (S5_OFFSET)(tp)
-	ld    s6, (S6_OFFSET)(tp)
-	ld    s7, (S7_OFFSET)(tp)
-	ld    s8, (S8_OFFSET)(tp)
-	ld    s9, (S9_OFFSET)(tp)
-	ld    s10,(S10_OFFSET)(tp)
-	ld    s11,(S11_OFFSET)(tp)
-	ld    t3, (T3_OFFSET)(tp)
-	ld    t4, (T4_OFFSET)(tp)
-	ld    t5, (T5_OFFSET)(tp)
-	ld    t6, (T6_OFFSET)(tp)
-
-	/* Disable preemption. */
-	csrc  mstatus,MSTATUS_MIE
-
-	/* Save the PCB pointer to mscratch. */
+	ld    ra, RA_OFFSET(tp)
+	ld    sp, SP_OFFSET(tp)
+	ld    gp, GP_OFFSET(tp)
+	ld    t0, T0_OFFSET(tp)
+	ld    t1, T1_OFFSET(tp)
+	ld    t2, T2_OFFSET(tp)
+	ld    a0, A0_OFFSET(tp)
+	ld    a1, A1_OFFSET(tp)
+	ld    a2, A2_OFFSET(tp)
+	ld    a3, A3_OFFSET(tp)
+	ld    a4, A4_OFFSET(tp)
+	ld    a5, A5_OFFSET(tp)
+	ld    a6, A6_OFFSET(tp)
+	ld    a7, A7_OFFSET(tp)
+	ld    t3, T3_OFFSET(tp)
+	ld    t4, T4_OFFSET(tp)
+	ld    t5, T5_OFFSET(tp)
+	ld    t6, T6_OFFSET(tp)
 	csrw  mscratch,tp
-
-	/* Load the user thread pointer. */
 	ld    tp, (TP_OFFSET)(tp)
-
-	/* Return to the user mode. */
 	mret

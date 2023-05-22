@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file init.h
  * @brief Declares the initialization function for the kernel.
@@ -10,10 +11,7 @@
  * @copyright MIT License
  * @author Henrik Karlsson (henrik10@kth.se)
  */
-#ifndef __INIT_H__
-#define __INIT_H__
-
-#include "proc.h"
+#include <stdint.h>
 
 /**
  * @brief Initializes the kernel with the given payload, which is a pointer to
@@ -26,5 +24,3 @@
  * @param payload A pointer to the boot process's code.
  */
 void init_kernel(uint64_t payload);
-
-#endif /* __INIT_H__ */

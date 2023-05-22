@@ -1,42 +1,53 @@
+#pragma once
 /**
  * @file syscall.h
  * @brief Definition of system calls and error codes.
  * @copyright MIT License
  * @author Henrik Karlsson (henrik10@kth.se)
  */
-#ifndef __SYSCALL_H__
-#define __SYSCALL_H__
-
+#include "cap_types.h"
 #include "proc.h"
 
 #include <stdint.h>
 
-#define SYSCALL_GET_INFO 0
-#define SYSCALL_GET_REG 1
-#define SYSCALL_SET_REG 2
-#define SYSCALL_YIELD 3
-#define SYSCALL_READ_CAP 4
-#define SYSCALL_MOVE_CAP 5
-#define SYSCALL_DELETE_CAP 6
-#define SYSCALL_REVOKE_CAP 7
-#define SYSCALL_DERIVE_CAP 8
-// Capbility invocations below
-#define SYSCALL_PMP_SET 9
-#define SYSCALL_PMP_CLEAR 10
-#define SYSCALL_SOCKET_RECV 11
-#define SYSCALL_SOCKET_SEND 12
-#define SYSCALL_SOCKET_SENDRECV 13
-#define SYSCALL_MONITOR_SUSPEND 14
-#define SYSCALL_MONITOR_RESUME 15
-#define SYSCALL_MONITOR_GET_REG 16
-#define SYSCALL_MONITOR_SET_REG 17
-#define SYSCALL_MONITOR_READ_CAP 18
-#define SYSCALL_MONITOR_GIVE_CAP 19
-#define SYSCALL_MONITOR_TAKE_CAP 20
-#define SYSCALL_MONITOR_PMP_SET 21
-#define SYSCALL_MONITOR_PMP_CLEAR 22
+typedef enum {
+	SYSCALL_GET_INFO,
+	SYSCALL_GET_REG,
+	SYSCALL_SET_REG,
+	SYSCALL_YIELD,
+	SYSCALL_GET_CAP,
+	SYSCALL_MOVE_CAP,
+	SYSCALL_DELETE_CAP,
+	SYSCALL_REVOKE_CAP,
+	SYSCALL_DERIVE_CAP,
+	SYSCALL_PMP_SET,
+	SYSCALL_PMP_CLEAR,
+	SYSCALL_MONITOR_SUSPEND,
+	SYSCALL_MONITOR_RESUME,
+	SYSCALL_MONITOR_GET_REG,
+	SYSCALL_MONITOR_SET_REG,
+	SYSCALL_MONITOR_GET_CAP,
+	SYSCALL_MONITOR_TAKE_CAP,
+	SYSCALL_MONITOR_GIVE_CAP,
+	SYSCALL_MONITOR_PMP_SET,
+	SYSCALL_MONITOR_PMP_CLEAR,
+	SYSCALL_SOCKET_SEND,
+	SYSCALL_SOCKET_RECV,
+	SYSCALL_SOCKET_SENDRECV,
+} syscall_nr_t;
 
-void syscall_handler(uint64_t sysnr, uint64_t a1, uint64_t a2, uint64_t a3,
-		     uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7);
+void syscall_handler(void) __attribute__((noreturn));
 
-#endif /* __SYSCALL_H__ */
+excpt_t syscall_get_info(uint64_t info);
+excpt_t syscall_get_reg(uint64_t regid);
+excpt_t syscall_set_reg(uint64_t regid, uint64_t value);
+excpt_t syscall_yield(uint64_t until);
+excpt_t syscall_get_cap(uint64_t cidx);
+excpt_t syscall_move_cap(uint64_t src_cidx, uint64_t dest_cidx);
+excpt_t syscall_delete_cap(uint64_t cidx);
+excpt_t syscall_revoke_cap(uint64_t cidx);
+excpt_t syscall_derive_cap(uint64_t orig_cidx, uint64_t dest_cidx, cap_t new_cap);
+excpt_t syscall_pmp_set(uint64_t pmp_cidx, uint64_t index);
+excpt_t syscall_pmp_clear(uint64_t pmp_cidx);
+excpt_t syscall_monitor_suspend(uint64_t mon_cidx, uint64_t pid);
+excpt_t syscall_monitor_resume(uint64_t mon_cidx, uint64_t pid);

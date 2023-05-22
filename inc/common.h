@@ -1,12 +1,10 @@
+#pragma once
 /**
  * @file common.h
  * @brief Macros.
  * @copyright MIT License
  * @author Henrik Karlsson (henrik10@kth.se)
  */
-
-#ifndef __COMMON_H__
-#define __COMMON_H__
 
 #define _STR_(x) #x
 #define STR(x) _STR_(x)
@@ -21,5 +19,3 @@
 
 /* Returns the size of an array */
 #define ARRAY_SIZE(x) (sizeof(x) / (sizeof((x)[0])))
-
-#endif /* __COMMON_H__ */

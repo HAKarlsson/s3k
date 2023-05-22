@@ -4,7 +4,6 @@
 #include "current.h"
 #include "preemption.h"
 #include "proc.h"
-#include "trap.h"
 
 #define ILLEGAL_INSTRUCTION 0x2
 
@@ -12,19 +11,22 @@
 #define SRET 0x10200073
 #define URET 0x00200073
 
+static void handle_ret(void);
+static void handle_default(uint64_t mcause, uint64_t mepc, uint64_t mtval);
+
 /**
  * This function restores the program counter and stack pointer to their values
  * prior to the exception, and clears the exception cause and exception value
  * registers.
  */
-static void handle_ret(void)
+void handle_ret(void)
 {
-	current->regs.pc = current->regs.epc;
-	current->regs.sp = current->regs.esp;
-	current->regs.ecause = 0;
-	current->regs.eval = 0;
-	current->regs.epc = 0;
-	current->regs.esp = 0;
+	current->regs[REG_PC] = current->regs[REG_EPC];
+	current->regs[REG_SP] = current->regs[REG_ESP];
+	current->regs[REG_ECAUSE] = 0;
+	current->regs[REG_EVAL] = 0;
+	current->regs[REG_EPC] = 0;
+	current->regs[REG_ESP] = 0;
 }
 
 /*
@@ -34,21 +36,20 @@ static void handle_ret(void)
  * pointer in the process's registers, and switches to the trap handler program
  * counter and stack pointer.
  */
-static void handle_default(uint64_t mcause, uint64_t mepc, uint64_t mtval)
+void handle_default(uint64_t mcause, uint64_t mepc, uint64_t mtval)
 {
-	current->regs.ecause = mcause;
-	current->regs.eval = mtval;
-	current->regs.epc = current->regs.pc;
-	current->regs.esp = current->regs.sp;
-	current->regs.pc = current->regs.tpc;
-	current->regs.sp = current->regs.tsp;
+	current->regs[REG_ECAUSE] = mcause;
+	current->regs[REG_EVAL] = mtval;
+	current->regs[REG_EPC] = current->regs[REG_PC];
+	current->regs[REG_ESP] = current->regs[REG_SP];
+	current->regs[REG_PC] = current->regs[REG_TPC];
+	current->regs[REG_SP] = current->regs[REG_TSP];
 }
 
-void handle_exception(uint64_t mcause, uint64_t mepc, uint64_t mtval)
+void exception_handler(uint64_t mcause, uint64_t mepc, uint64_t mtval)
 {
 	/* Check if it is a return from exception */
-	if (mcause == ILLEGAL_INSTRUCTION
-	    && (mtval == MRET || mtval == SRET || mtval == URET)) {
+	if (mcause == ILLEGAL_INSTRUCTION && (mtval == MRET || mtval == SRET || mtval == URET)) {
 		// Handle return from exception
 		handle_ret();
 	} else {
