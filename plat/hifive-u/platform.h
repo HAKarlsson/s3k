@@ -10,6 +10,8 @@
 // RTC ticks per second
 #define TICKS_PER_SECOND 1000000ull
 
+#define CLINT 0x2000000ull
+
 /// Stack size of 256 B
 #define LOG_STACK_SIZE 8
 

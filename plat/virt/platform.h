@@ -13,4 +13,6 @@
 /// Stack size of 256 KiB
 #define LOG_STACK_SIZE 8
 
+#define CLINT 0x2000000ull
+
 #endif /* __PLATFORM_H__ */

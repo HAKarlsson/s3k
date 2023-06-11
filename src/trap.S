@@ -62,10 +62,7 @@ trap_entry:
 2:
 
 	/* Load the global and stack pointer of the kernel. */
-	.option push
-	.option norelax
-	la gp, __global_pointer$
-	.option pop
+	load_gp
 	load_sp t1
 
 	csrr t1, mcause

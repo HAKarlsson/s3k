@@ -73,7 +73,10 @@
 #define CAPTY_SOCKET 6
 
 /* Machine CSR constants */
-#define MIP_MTIMER 0x8
+#define MIP_MSIP 8
+#define MIE_MSIE 8
+#define MIP_MTIP 128
+#define MIE_MTIE 128
 #define MCAUSE_USER_ECALL 8
 #define MSTATUS_MIE 8
 
