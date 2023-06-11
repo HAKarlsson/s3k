@@ -1,27 +1,19 @@
 #pragma once
 
 #include "cap_types.h"
-#include "excpt.h"
+#include "kassert.h"
 
 #include <stdbool.h>
 #include <stddef.h>
 
 #define CTABLE_MAX_DEPTH 256
 
-typedef int16_t cptr_t;
+typedef int32_t cptr_t;
 
 typedef struct {
-	uint32_t depth;
 	cptr_t prev, next;
 	cap_t cap;
 } cte_t;
-
-static inline cptr_t cptr_mk(uint64_t pid, uint64_t idx)
-{
-	if (idx >= NUM_OF_CAPABILITIES)
-		return -1;
-	return pid * NUM_OF_CAPABILITIES + idx;
-}
 
 static inline bool cptr_is_valid(cptr_t cptr)
 {
@@ -33,10 +25,18 @@ static inline uint64_t cptr_get_pid(cptr_t cptr)
 	return cptr / NUM_OF_CAPABILITIES;
 }
 
+static inline cptr_t cptr_mk(uint64_t pid, uint64_t idx)
+{
+	if (idx >= NUM_OF_CAPABILITIES)
+		return -1;
+	cptr_t cptr = pid * NUM_OF_CAPABILITIES + idx;
+	kassert(cptr_get_pid(cptr) == pid);
+	return cptr;
+}
+
 bool ctable_is_null(cptr_t cptr);
 
 cap_t ctable_get_cap(cptr_t cptr);
-uint32_t ctable_get_depth(cptr_t cptr);
 cptr_t ctable_get_next(cptr_t cptr);
 cptr_t ctable_get_prev(cptr_t cptr);
 

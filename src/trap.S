@@ -1,258 +1,211 @@
 // See LICENSE file for copyright and license details.
-
-
 #include "macro.inc"
-
-/** Offsets into PCB */
-#define PC_OFFSET 0
-#define RA_OFFSET 8
-#define SP_OFFSET 16
-#define GP_OFFSET 24
-#define TP_OFFSET 32
-#define T0_OFFSET 40
-#define T1_OFFSET 48
-#define T2_OFFSET 56
-#define S0_OFFSET 64
-#define S1_OFFSET 72
-#define A0_OFFSET 80
-#define A1_OFFSET 88
-#define A2_OFFSET 96
-#define A3_OFFSET 104
-#define A4_OFFSET 112
-#define A5_OFFSET 120
-#define A6_OFFSET 128
-#define A7_OFFSET 136
-#define S2_OFFSET 144
-#define S3_OFFSET 152
-#define S4_OFFSET 160
-#define S5_OFFSET 168
-#define S6_OFFSET 176
-#define S7_OFFSET 184
-#define S8_OFFSET 192
-#define S9_OFFSET 200
-#define S10_OFFSET 208
-#define S11_OFFSET 216
-#define T3_OFFSET 224
-#define T4_OFFSET 232
-#define T5_OFFSET 240
-#define T6_OFFSET 248
-
-#define	TPC_OFFSET 256
-#define TSP_OFFSET 264
-#define	EPC_OFFSET 272
-#define ESP_OFFSET 280
-#define	ECAUSE_OFFSET 288
-#define EVAL_OFFSET 296
-
-#define PMPCFG0_OFFSET 304
-#define PMPADDR0_OFFSET 312
-#define PMPADDR1_OFFSET 320
-#define PMPADDR2_OFFSET 328
-#define PMPADDR3_OFFSET 336
-#define PMPADDR4_OFFSET 344
-#define PMPADDR5_OFFSET 352
-#define PMPADDR6_OFFSET 360
-#define PMPADDR7_OFFSET 368
-
-#define USER_ECALL 8
-#define MSTATUS_MIE 8
-#define NUM_OF_SYSCALL 10
+#include "consts.h"
 
 .globl trap_entry
+.globl trap_syscall_exit
 .globl trap_schedule_exit
 .globl trap_exit
 
 .type trap_entry, @function
+.type trap_syscall_exit, @function
+.type trap_schedule_exit, @function
 .type trap_exit, @function
 
 .section .text.trap
-
-        /* Function: trap_entry
-        This is a trap handler that saves user registers to the
-        process control block (PCB) and handles system calls and
-        interrupts. It first saves the user thread pointer (TP) to the
-        machine scratch register (mscratch) and loads the PCB for the
-        current thread. If the PCB is zero, this means that the trap
-        occurred in machine-mode, otherwise user-mode. If the trap
-        occured in machine-mode, we load swap the tp with mscratch
-        again, restoring the PCB pointer, and we call the timer
-        interrupt handler (we assume that it is the only cause of a
-        trap while in machine-mode).
-
-        If the trap occured in user-mode, we save the user-registers
-        to the PCB. This allows the kernel to resume the user at a
-        later time.  Next, the handler checks the cause of the
-        trap. If mcause < 0, we have a timer interrupt. If mcause ==
-        USER_ECALL, then we have a system call. Otherwise we have a
-        user-mode exception. For each types of trap, the handler jumps
-        to the appropriate handler. The return address is set to
-        trap_exit, so once trap has been handled, we resume a user
-        process.
-        */
-
-.balign  16
+.balign 16
 trap_entry:
-        /* save user tp to scratch, load PCB */
+	/* save user tp to scratch, load PCB */
 	csrrw tp, mscratch, tp
 
-        /* save user registers (except tp and pc) */
-	sd    ra, RA_OFFSET(tp)
-	sd    sp, SP_OFFSET(tp)
-	sd    gp, GP_OFFSET(tp)
-	sd    t0, T0_OFFSET(tp)
-	sd    t1, T1_OFFSET(tp)
-	sd    t2, T2_OFFSET(tp)
-	sd    a0, A0_OFFSET(tp)
-	sd    a1, A1_OFFSET(tp)
-	sd    a2, A2_OFFSET(tp)
-	sd    a3, A3_OFFSET(tp)
-	sd    a4, A4_OFFSET(tp)
-	sd    a5, A5_OFFSET(tp)
-	sd    a6, A6_OFFSET(tp)
-	sd    a7, A7_OFFSET(tp)
-	sd    t3, T3_OFFSET(tp)
-	sd    t4, T4_OFFSET(tp)
-	sd    t5, T5_OFFSET(tp)
-	sd    t6, T6_OFFSET(tp)
+	bnez tp, 1f
+	csrrw tp, mscratch,zero
+	j 2f
+1:
 
-        /* save user pc and tp */
-	csrr  t1, mepc
-	sd    t1, PC_OFFSET(tp)
+	/* save user registers (except tp and pc) */
+	sd ra, REG_RA(tp)
+	sd sp, REG_SP(tp)
+	sd gp, REG_GP(tp)
+	sd t0, REG_T0(tp)
+	sd t1, REG_T1(tp)
+	sd t2, REG_T2(tp)
+	sd s0, REG_S0(tp)
+	sd s1, REG_S1(tp)
+	sd a0, REG_A0(tp)
+	sd a1, REG_A1(tp)
+	sd a2, REG_A2(tp)
+	sd a3, REG_A3(tp)
+	sd a4, REG_A4(tp)
+	sd a5, REG_A5(tp)
+	sd a6, REG_A6(tp)
+	sd a7, REG_A7(tp)
+	sd s2, REG_S2(tp)
+	sd s3, REG_S3(tp)
+	sd s4, REG_S4(tp)
+	sd s5, REG_S5(tp)
+	sd s6, REG_S6(tp)
+	sd s7, REG_S7(tp)
+	sd s8, REG_S8(tp)
+	sd s9, REG_S9(tp)
+	sd s10, REG_S10(tp)
+	sd s11, REG_S11(tp)
+	sd t3, REG_T3(tp)
+	sd t4, REG_T4(tp)
+	sd t5, REG_T5(tp)
+	sd t6, REG_T6(tp)
+	csrr t1, mepc
+	sd t1, REG_PC(tp)
 	csrrw t1, mscratch, zero
-	sd    t1, TP_OFFSET(tp)
+	sd t1, REG_TP(tp)
 
-2:      
-        /* Load the global and stack pointer of the kernel. */
+2:
+
+	/* Load the global and stack pointer of the kernel. */
 	.option push
 	.option norelax
-	la    gp, __global_pointer$
+	la gp, __global_pointer$
 	.option pop
 	load_sp t1
 
-        /* Get the trap cause. */
-	csrr  t1, mcause
+	csrr t1, mcause
 
-        /* Set return address to trap_exit. */
-        lla   ra, trap_exit
+	/* If interrupt */
+	bltz t1, _yield
 
-	/* If mcause < 0, then timer interrupt. */
-	bltz  t1, _yield
-        /* Check if system call. */
-	li    t2, USER_ECALL
-	beq   t1, t2, _syscall
+	/* Check if system call. */
+	li t2, MCAUSE_USER_ECALL
+	beq t1, t2, _syscall
 
 _exception:
-        /* Otherwise, it is exception. */
-        csrr  a0, mcause
-        csrr  a1, mepc
-        csrr  a2, mtval
-        call  exception_handler
-        j     trap_exit
+	/* Otherwise, it is exception. */
+	mv a0, t1
+	csrr a1, mepc
+	csrr a2, mtval
+	call exception_handler
+	j trap_exit
 
 _syscall:
-        // Jump to handler
-1:      auipc ra,%pcrel_hi(_syscall_table)
-        slli  t0,t0,2
-        add   ra,ra,t0
-        jalr  ra,%pcrel_lo(1b)
-        // If a0 < 0, then yield
-        sd    a0,T0_OFFSET(tp)
-        csrr  t0,mepc
-        addi  t0,t0,4
-        sd    t0,PC_OFFSET(tp)
-        bltz  a0,_yield
-        j     trap_exit
+	li t1, NUM_OF_SYSCALL
+	bgeu t0, t1, _exception
 
-_syscall_table:
-        .option push
-        .option norvc
-        j     syscall_get_info
-        j     syscall_get_reg
-        j     syscall_set_reg
-        j     syscall_yield
-        j     syscall_get_cap
-        j     syscall_move_cap
-        j     syscall_delete_cap
-        j     syscall_revoke_cap
-        j     syscall_derive_cap
-        j     syscall_pmp_set
-        j     syscall_pmp_clear
-        .option pop
+	csrw mcycle,x0
+
+1:	auipc ra, %pcrel_hi(_syscall_table)
+	slli t0, t0, 2
+	add ra, ra, t0
+	jalr ra, %pcrel_lo(1b)(ra)
+
+	csrr t0,mcycle
+	addi t1,tp,REG_INSTRUMENT_WCET
+	amomax.d x0, t0,(t1)
+
+	sd a0, REG_T0(tp)
+	/* Advance PC */
+	ld t1, REG_PC(tp)
+	addi t1, t1, 4
+	sd t1, REG_PC(tp)
+
+	/* If error code < 0, then fall-through */
+	bgez a0, trap_exit
+	csrw mstatus, x0
 
 _yield:
-	sd    s0, S0_OFFSET(tp)
-	sd    s1, S1_OFFSET(tp)
-	sd    s2, S2_OFFSET(tp)
-	sd    s3, S3_OFFSET(tp)
-	sd    s4, S4_OFFSET(tp)
-	sd    s5, S5_OFFSET(tp)
-	sd    s6, S6_OFFSET(tp)
-	sd    s7, S7_OFFSET(tp)
-	sd    s8, S8_OFFSET(tp)
-	sd    s9, S9_OFFSET(tp)
-	sd    s10,S10_OFFSET(tp)
-	sd    s11,S11_OFFSET(tp)
-
-        call  schedule_yield
-
-trap_schedule_exit:
-
-	ld    s0, S0_OFFSET(tp)
-	ld    s1, S1_OFFSET(tp)
-	ld    s2, S2_OFFSET(tp)
-	ld    s3, S3_OFFSET(tp)
-	ld    s4, S4_OFFSET(tp)
-	ld    s5, S5_OFFSET(tp)
-	ld    s6, S6_OFFSET(tp)
-	ld    s7, S7_OFFSET(tp)
-	ld    s8, S8_OFFSET(tp)
-	ld    s9, S9_OFFSET(tp)
-	ld    s10,S10_OFFSET(tp)
-	ld    s11,S11_OFFSET(tp)
+	call schedule_yield
 
 trap_exit:
+	csrw mstatus, MSTATUS_MIE
 
-        /* Load PMP addresses */
-        ld    t0, PMPCFG0_OFFSET(tp)
-        ld    a0, PMPADDR0_OFFSET(tp)
-        ld    a1, PMPADDR1_OFFSET(tp)
-        ld    a2, PMPADDR2_OFFSET(tp)
-        ld    a3, PMPADDR3_OFFSET(tp)
-        ld    a4, PMPADDR4_OFFSET(tp)
-        ld    a5, PMPADDR5_OFFSET(tp)
-        ld    a6, PMPADDR6_OFFSET(tp)
-        ld    a7, PMPADDR7_OFFSET(tp)
-        csrw  pmpcfg0, t0
-        csrw  pmpaddr0, a0
-        csrw  pmpaddr1, a1
-        csrw  pmpaddr2, a2
-        csrw  pmpaddr3, a3
-        csrw  pmpaddr4, a4
-        csrw  pmpaddr5, a5
-        csrw  pmpaddr6, a6
-        csrw  pmpaddr7, a7
+	/* Load PC */
+	ld t0, REG_PC(tp)
+	csrw mepc,t0
 
-        csrw  mstatus,x0
-	ld    t0, PC_OFFSET(tp)
-	csrw  mepc,t0
-	ld    ra, RA_OFFSET(tp)
-	ld    sp, SP_OFFSET(tp)
-	ld    gp, GP_OFFSET(tp)
-	ld    t0, T0_OFFSET(tp)
-	ld    t1, T1_OFFSET(tp)
-	ld    t2, T2_OFFSET(tp)
-	ld    a0, A0_OFFSET(tp)
-	ld    a1, A1_OFFSET(tp)
-	ld    a2, A2_OFFSET(tp)
-	ld    a3, A3_OFFSET(tp)
-	ld    a4, A4_OFFSET(tp)
-	ld    a5, A5_OFFSET(tp)
-	ld    a6, A6_OFFSET(tp)
-	ld    a7, A7_OFFSET(tp)
-	ld    t3, T3_OFFSET(tp)
-	ld    t4, T4_OFFSET(tp)
-	ld    t5, T5_OFFSET(tp)
-	ld    t6, T6_OFFSET(tp)
-	csrw  mscratch,tp
-	ld    tp, (TP_OFFSET)(tp)
+	/* Load PMP addresses */
+	ld t0, REG_PMPCFG0(tp)
+	ld a0, REG_PMPADDR0(tp)
+	ld a1, REG_PMPADDR1(tp)
+	ld a2, REG_PMPADDR2(tp)
+	ld a3, REG_PMPADDR3(tp)
+	ld a4, REG_PMPADDR4(tp)
+	ld a5, REG_PMPADDR5(tp)
+	ld a6, REG_PMPADDR6(tp)
+	ld a7, REG_PMPADDR7(tp)
+	csrw pmpcfg0, t0
+	csrw pmpaddr0, a0
+	csrw pmpaddr1, a1
+	csrw pmpaddr2, a2
+	csrw pmpaddr3, a3
+	csrw pmpaddr4, a4
+	csrw pmpaddr5, a5
+	csrw pmpaddr6, a6
+	csrw pmpaddr7, a7
+
+	ld ra, REG_RA(tp)
+	ld sp, REG_SP(tp)
+	ld gp, REG_GP(tp)
+	ld t0, REG_T0(tp)
+	ld t1, REG_T1(tp)
+	ld t2, REG_T2(tp)
+	ld s0, REG_S0(tp)
+	ld s1, REG_S1(tp)
+	ld a0, REG_A0(tp)
+	ld a1, REG_A1(tp)
+	ld a2, REG_A2(tp)
+	ld a3, REG_A3(tp)
+	ld a4, REG_A4(tp)
+	ld a5, REG_A5(tp)
+	ld a6, REG_A6(tp)
+	ld a7, REG_A7(tp)
+	ld t3, REG_T3(tp)
+	ld t4, REG_T4(tp)
+	ld t5, REG_T5(tp)
+	ld t6, REG_T6(tp)
+	ld s2, REG_S2(tp)
+	ld s3, REG_S3(tp)
+	ld s4, REG_S4(tp)
+	ld s5, REG_S5(tp)
+	ld s6, REG_S6(tp)
+	ld s7, REG_S7(tp)
+	ld s8, REG_S8(tp)
+	ld s9, REG_S9(tp)
+	ld s10, REG_S10(tp)
+	ld s11, REG_S11(tp)
+
+	csrw mstatus,0
+
+	csrw mscratch, tp
+	ld tp, REG_TP(tp)
+
 	mret
+
+_hang:
+	ebreak
+	j _hang
+
+.option push
+.option norvc
+_syscall_table:
+	j syscall_get_info
+	j syscall_get_reg
+	j syscall_set_reg
+	j syscall_yield
+	j syscall_get_cap
+	j syscall_move_cap
+	j syscall_delete_cap
+	j syscall_revoke_cap
+	j syscall_derive_cap
+	j syscall_pmp_set
+	j syscall_pmp_clear
+	j syscall_monitor_suspend
+	j syscall_monitor_resume
+	j syscall_monitor_get_reg
+	j syscall_monitor_set_reg
+	j syscall_monitor_get_cap
+	j syscall_monitor_take_cap
+	j syscall_monitor_give_cap
+	j syscall_monitor_pmp_set
+	j syscall_monitor_pmp_clear
+	j syscall_socket_send
+	j syscall_socket_recv
+	j syscall_socket_sendrecv
+.option pop

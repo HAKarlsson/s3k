@@ -6,7 +6,6 @@
 #include "common.h"
 #include "csr.h"
 #include "current.h"
-#include "excpt.h"
 #include "kassert.h"
 #include "preemption.h"
 #include "proc.h"
@@ -16,7 +15,7 @@
 
 #define CURRENT_ARGS (&current->regs[REG_A0])
 
-excpt_t syscall_get_info(uint64_t info)
+int syscall_get_info(uint64_t info)
 {
 	switch (info) {
 	case 0:
@@ -28,12 +27,18 @@ excpt_t syscall_get_info(uint64_t info)
 	case 2:
 		CURRENT_ARGS[0] = current->end_time;
 		return EXCPT_NONE;
+#ifdef INSTRUMENTATION
+	case 3:
+		CURRENT_ARGS[0] = current->instrument_wcet;
+		current->instrument_wcet = 0;
+		return EXCPT_NONE;
+#endif
 	default:
 		return EXCPT_ERROR;
 	}
 }
 
-excpt_t syscall_get_reg(uint64_t regid)
+int syscall_get_reg(uint64_t regid)
 {
 	if (regid <= REG_T6 || regid >= NUM_OF_REGS)
 		return EXCPT_REG_INDEX;
@@ -42,142 +47,217 @@ excpt_t syscall_get_reg(uint64_t regid)
 	return EXCPT_NONE;
 }
 
-excpt_t syscall_set_reg(uint64_t reg, uint64_t value)
+int syscall_set_reg(uint64_t reg, uint64_t value)
 {
 	if (reg <= REG_T6 || reg >= NUM_OF_REGS)
 		return EXCPT_REG_INDEX;
-	CURRENT_ARGS[reg] = value;
+
+	current->regs[reg] = value;
 	return EXCPT_NONE;
 }
 
-excpt_t syscall_yield(uint64_t until)
+int syscall_yield(uint64_t until)
 {
 	// Yield.
 	current->sleep = until ? until : current->end_time;
-	schedule_yield();
 	return EXCPT_PREEMPT;
 }
 
-excpt_t syscall_get_cap(uint64_t cidx)
+int syscall_get_cap(uint64_t cidx)
 {
 	// Create and check that capability pointer is valid.
 	cptr_t cptr = cptr_mk(current->pid, cidx);
 	if (!cptr_is_valid(cptr))
 		return EXCPT_INDEX;
-	return cap_get_cap(cptr, CURRENT_ARGS);
+
+	cap_t cap = ctable_get_cap(cptr);
+	CURRENT_ARGS[0] = cap.raw;
+	return EXCPT_NONE;
 }
 
-excpt_t syscall_move_cap(uint64_t src_cidx, uint64_t dest_cidx)
+int syscall_move_cap(uint64_t src_cidx, uint64_t dest_cidx)
 {
 	// Create and check that capability pointers are valid.
 	cptr_t src = cptr_mk(current->pid, src_cidx);
 	cptr_t dst = cptr_mk(current->pid, dest_cidx);
 	if (!cptr_is_valid(src) || !cptr_is_valid(dst))
 		return EXCPT_INDEX;
+
 	return cap_move(src, dst);
 }
 
-excpt_t syscall_delete_cap(uint64_t cidx)
+int syscall_delete_cap(uint64_t cidx)
 {
 	// Create and check that capability pointer is valid.
 	cptr_t cptr = cptr_mk(current->pid, cidx);
 	if (!cptr_is_valid(cptr))
 		return EXCPT_INDEX;
+
 	return cap_delete(cptr);
 }
 
-excpt_t syscall_revoke_cap(uint64_t cidx)
+int syscall_revoke_cap(uint64_t cidx)
 {
 	// Create and check that capability pointer is valid.
 	cptr_t cptr = cptr_mk(current->pid, cidx);
 	if (!cptr_is_valid(cptr))
 		return EXCPT_INDEX;
+
 	return cap_revoke(cptr);
 }
 
-excpt_t syscall_derive_cap(uint64_t orig_cidx, uint64_t dest_cidx, cap_t new_cap)
+int syscall_derive_cap(uint64_t orig_cidx, uint64_t dest_cidx, cap_t new_cap)
 {
 	// Create and check that capability pointers are valid.
 	cptr_t orig = cptr_mk(current->pid, orig_cidx);
 	cptr_t dest = cptr_mk(current->pid, dest_cidx);
 	if (!cptr_is_valid(orig) || !cptr_is_valid(dest))
 		return EXCPT_INDEX;
+
 	return cap_derive(orig, dest, new_cap);
 }
 
-excpt_t syscall_pmp_set(uint64_t pmp_cidx, uint64_t index)
+int syscall_pmp_set(uint64_t pmp_cidx, uint64_t index)
 {
 	cptr_t cptr = cptr_mk(current->pid, pmp_cidx);
 	if (!cptr_is_valid(cptr))
 		return EXCPT_INDEX;
-	if (index >= NUM_OF_PMP)
-		return EXCPT_ERROR;
+
 	return cap_pmp_set(cptr, index);
 }
 
-excpt_t syscall_pmp_clear(uint64_t pmp_cidx)
+int syscall_pmp_clear(uint64_t pmp_cidx)
 {
-	cptr_t cptr = cptr_mk(current->pid, pmp_cidx);
-	if (!cptr_is_valid(cptr))
+	cptr_t pmp_cptr = cptr_mk(current->pid, pmp_cidx);
+	if (!cptr_is_valid(pmp_cptr))
 		return EXCPT_INDEX;
-	return cap_pmp_clear(cptr);
+
+	return cap_pmp_clear(pmp_cptr);
 }
 
-// excpt_t syscall_invoke_monitor(uint64_t sysnr, proc_t *proc, uint64_t args[8], uint64_t ret[1])
-//{
-//	// Create and check if the capability pointer is valid
-//	cptr_t mon = cptr_mk(proc->pid, args[0]);
-//	if (!cptr_is_valid(mon))
-//		return EXCPT_INDEX;
-//
-//	uint64_t pid = args[1];
-//
-//	// Dispatch the system call based on the provided sysnr
-//	switch (sysnr) {
-//	case SYSCALL_MONITOR_SUSPEND:
-//		return cap_monitor_suspend(mon, pid);
-//	case SYSCALL_MONITOR_RESUME:
-//		return cap_monitor_resume(mon, pid);
-//	case SYSCALL_MONITOR_GET_REG: {
-//		uint64_t reg = args[2];
-//		if (reg >= NUM_OF_REGS)
-//			return EXCPT_MONITOR_REG_INDEX;
-//		return cap_monitor_get_reg(mon, pid, reg, ret);
-//	}
-//	case SYSCALL_MONITOR_SET_REG: {
-//		uint64_t reg = args[2];
-//		uint64_t val = args[3];
-//		if (reg >= NUM_OF_REGS)
-//			return EXCPT_MONITOR_REG_INDEX;
-//		return cap_monitor_set_reg(mon, pid, reg, val);
-//	}
-//	case SYSCALL_MONITOR_GET_CAP: {
-//		uint64_t cidx = args[2];
-//		if (cidx >= NUM_OF_CAPABILITIES)
-//			return EXCPT_MONITOR_INDEX;
-//		// Create and check if cptr is valid
-//		return cap_monitor_get_cap(mon, pid, cidx, ret);
-//	}
-//	case SYSCALL_MONITOR_TAKE_CAP: {
-//		uint64_t src_cidx = args[2];
-//		uint64_t dest_cidx = args[3];
-//		if (src_cidx >= NUM_OF_CAPABILITIES || dest_cidx >= NUM_OF_CAPABILITIES)
-//			return EXCPT_MONITOR_INDEX;
-//		return cap_monitor_move_cap(mon, pid, src_cidx, dest_cidx, true);
-//	}
-//	case SYSCALL_MONITOR_GIVE_CAP: {
-//		uint64_t src_cidx = args[2];
-//		uint64_t dest_cidx = args[3];
-//		if (src_cidx >= NUM_OF_CAPABILITIES || dest_cidx >= NUM_OF_CAPABILITIES)
-//			return EXCPT_MONITOR_INDEX;
-//		return cap_monitor_move_cap(mon, pid, src_cidx, dest_cidx, false);
-//	}
-//	default:
-//		kassert(0); // This should never be reached.
-//	}
-// }
-//
-// excpt_t syscall_invoke_socket(uint64_t sysnr, proc_t *proc, uint64_t args[8], uint64_t ret[1])
-//{
-//	return EXCPT_UNIMPLEMENTED;
-// }
+int syscall_monitor_suspend(uint64_t mon_cidx, uint64_t pid)
+{
+	cptr_t mon_cptr = cptr_mk(current->pid, mon_cidx);
+	if (!cptr_is_valid(mon_cptr))
+		return EXCPT_INDEX;
+
+	return cap_monitor_suspend(mon_cptr, pid);
+}
+
+int syscall_monitor_resume(uint64_t mon_cidx, uint64_t pid)
+{
+	cptr_t mon_cptr = cptr_mk(current->pid, mon_cidx);
+	if (!cptr_is_valid(mon_cptr))
+		return EXCPT_INDEX;
+
+	return cap_monitor_resume(mon_cptr, pid);
+}
+
+int syscall_monitor_get_reg(uint64_t mon_cidx, uint64_t pid, uint64_t reg)
+{
+	cptr_t mon_cptr = cptr_mk(current->pid, mon_cidx);
+	if (!cptr_is_valid(mon_cptr))
+		return EXCPT_INDEX;
+
+	if (reg >= NUM_OF_REGS)
+		return EXCPT_MONITOR_REG_INDEX;
+
+	return cap_monitor_get_reg(mon_cptr, pid, reg, CURRENT_ARGS);
+}
+
+int syscall_monitor_set_reg(uint64_t mon_cidx, uint64_t pid, uint64_t reg, uint64_t val)
+{
+	cptr_t mon_cptr = cptr_mk(current->pid, mon_cidx);
+	if (!cptr_is_valid(mon_cptr))
+		return EXCPT_INDEX;
+
+	if (reg >= NUM_OF_REGS)
+		return EXCPT_MONITOR_REG_INDEX;
+
+	return cap_monitor_set_reg(mon_cptr, pid, reg, val);
+}
+
+int syscall_monitor_get_cap(uint64_t mon_cidx, uint64_t pid, uint64_t src_cidx, uint64_t dest_cidx)
+{
+	cptr_t mon_cptr = cptr_mk(pid, mon_cidx);
+	if (!cptr_is_valid(mon_cptr))
+		return EXCPT_INDEX;
+
+	cptr_t cptr = cptr_mk(pid, src_cidx);
+	if (cptr < 0)
+		return EXCPT_MONITOR_INDEX;
+
+	return cap_monitor_get_cap(mon_cptr, pid, cptr, CURRENT_ARGS);
+}
+
+int syscall_monitor_take_cap(uint64_t mon_cidx, uint64_t pid, uint64_t src_cidx, uint64_t dest_cidx)
+{
+	cptr_t mon_cptr = cptr_mk(pid, mon_cidx);
+	if (!cptr_is_valid(mon_cptr))
+		return EXCPT_INDEX;
+
+	cptr_t src_cptr = cptr_mk(pid, src_cidx);
+	cptr_t dest_cptr = cptr_mk(current->pid, dest_cidx);
+	if (!cptr_is_valid(src_cptr) || !cptr_is_valid(dest_cptr))
+		return EXCPT_MONITOR_INDEX;
+
+	return cap_monitor_move_cap(mon_cptr, pid, src_cptr, dest_cptr);
+}
+
+int syscall_monitor_give_cap(uint64_t mon_cidx, uint64_t pid, uint64_t src_cidx, uint64_t dest_cidx)
+{
+	cptr_t mon_cptr = cptr_mk(pid, mon_cidx);
+	if (!cptr_is_valid(mon_cptr))
+		return EXCPT_INDEX;
+
+	cptr_t src_cptr = cptr_mk(current->pid, src_cidx);
+	cptr_t dest_cptr = cptr_mk(pid, dest_cidx);
+	if (!cptr_is_valid(src_cptr) || !cptr_is_valid(dest_cptr))
+		return EXCPT_MONITOR_INDEX;
+
+	return cap_monitor_move_cap(mon_cptr, pid, src_cptr, dest_cptr);
+}
+
+int syscall_monitor_pmp_set(uint64_t mon_cidx, uint64_t pid, uint64_t pmp_cidx, uint64_t index)
+{
+	cptr_t mon_cptr = cptr_mk(pid, mon_cidx);
+	if (!cptr_is_valid(mon_cptr))
+		return EXCPT_INDEX;
+
+	cptr_t pmp_cptr = cptr_mk(pid, pmp_cidx);
+	if (!cptr_is_valid(pmp_cidx))
+		return EXCPT_MONITOR_INDEX;
+
+	if (index < NUM_OF_PMP)
+		return EXCPT_PMP_INDEX;
+
+	return cap_monitor_pmp_set(mon_cptr, pid, pmp_cptr, index);
+}
+
+int syscall_monitor_pmp_clear(uint64_t mon_cidx, uint64_t pid, uint64_t pmp_cidx)
+{
+	cptr_t mon_cptr = cptr_mk(pid, mon_cidx);
+	if (!cptr_is_valid(mon_cptr))
+		return EXCPT_INDEX;
+
+	cptr_t pmp_cptr = cptr_mk(pid, pmp_cidx);
+	if (!cptr_is_valid(pmp_cidx))
+		return EXCPT_MONITOR_INDEX;
+
+	return cap_monitor_pmp_clear(mon_cptr, pid, pmp_cptr);
+}
+
+int syscall_socket_send(void)
+{
+	return 0;
+}
+
+int syscall_socket_recv(void)
+{
+	return 0;
+}
+
+int syscall_socket_sendrecv(void)
+{
+	return 0;
+}

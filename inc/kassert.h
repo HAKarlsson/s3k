@@ -12,7 +12,6 @@
  * compiler that the condition is assumed to be true.
  *
  * @copyright MIT License
- * @author Henrik Karlsson (henrik10@kth.se)
  */
 #ifdef NDEBUG
 

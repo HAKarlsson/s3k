@@ -22,7 +22,7 @@ bool do_send(proc_t *sender, proc_t *receiver, uint64_t channel, uint64_t msgs[4
 	return true;
 }
 
-excpt_t ipc_recv(proc_t *proc, cptr_t cptr)
+int ipc_recv(proc_t *proc, cptr_t cptr)
 {
 	cap_t cap = ctable_get_cap(cptr);
 
@@ -37,7 +37,7 @@ excpt_t ipc_recv(proc_t *proc, cptr_t cptr)
 	// For recv socket: Become receiver and wait.
 }
 
-excpt_t ipc_send(proc_t *proc, cptr_t cptr, uint64_t msgs[4], uint64_t yield)
+int ipc_send(proc_t *proc, cptr_t cptr, uint64_t msgs[4], uint64_t yield)
 {
 	cap_t cap = ctable_get_cap(cptr);
 
@@ -59,7 +59,7 @@ excpt_t ipc_send(proc_t *proc, cptr_t cptr, uint64_t msgs[4], uint64_t yield)
 	// For recv socket: Send message.
 }
 
-excpt_t ipc_sendrecv(proc_t *proc, cptr_t cptr, uint64_t msgs[4])
+int ipc_sendrecv(proc_t *proc, cptr_t cptr, uint64_t msgs[4])
 {
 	cap_t cap = ctable_get_cap(cptr);
 

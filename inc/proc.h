@@ -8,9 +8,9 @@
  * contains the declarations of functions for manipulating the PCB.
  *
  * @copyright MIT License
- * @author Henrik Karlsson (henrik10@kth.se)
  */
 
+#include "consts.h"
 #include "ticket_lock.h"
 
 #include <stdbool.h>
@@ -19,64 +19,13 @@
 #define NUM_OF_PMP 8
 
 /** Process state flags
- * PSF_BUSY: Some core
- * PSF_BLOCK: Waiting for IPC.
- * PSF_SUSPEND: Waiting for monitor
+ * PSF_BUSY: Process has been acquired.
+ * PSF_BLOCKED: Waiting for IPC.
+ * PSF_SUSPENDED: Waiting for monitor
  */
 #define PSF_BUSY 1
-#define PSF_BLOCK 2
-#define PSF_SUSPEND 4
-#define PSF_WAITING 8
-
-/** Process states */
-#define PS_READY 0
-#define PS_RUNNING 1
-#define PS_BLOCKED 2
-#define PS_BLOCKED_BUSY 3
-#define PS_SUSPENDED 4
-#define PS_SUSPENDED_BUSY 5
-
-typedef enum {
-	REG_PC,
-	REG_RA,
-	REG_SP,
-	REG_GP,
-	REG_TP,
-	REG_T0,
-	REG_T1,
-	REG_T2,
-	REG_S0,
-	REG_S1,
-	REG_A0,
-	REG_A1,
-	REG_A2,
-	REG_A3,
-	REG_A4,
-	REG_A5,
-	REG_A6,
-	REG_A7,
-	REG_S2,
-	REG_S3,
-	REG_S4,
-	REG_S5,
-	REG_S6,
-	REG_S7,
-	REG_S8,
-	REG_S9,
-	REG_S10,
-	REG_S11,
-	REG_T3,
-	REG_T4,
-	REG_T5,
-	REG_T6,
-	REG_TPC,
-	REG_TSP,
-	REG_EPC,
-	REG_ESP,
-	REG_ECAUSE,
-	REG_EVAL,
-	NUM_OF_REGS
-} regs_t;
+#define PSF_BLOCKED 2
+#define PSF_SUSPENDED 4
 
 /**
  * @brief Process control block.
@@ -87,9 +36,11 @@ typedef struct {
 	/** The registers of the process (RISC-V registers and virtual
 	 * registers). */
 	uint64_t regs[NUM_OF_REGS];
-	/** PMP settings */
+	/** PMP registers */
 	uint8_t pmpcfg[NUM_OF_PMP];
 	uint64_t pmpaddr[NUM_OF_PMP];
+	/** Instrumentation registers */
+	uint64_t instrument_wcet;
 	/** Process ID. */
 	uint64_t pid;
 	/** Process state. */

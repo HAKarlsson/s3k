@@ -9,6 +9,7 @@ void kassert_failure(const char *file, unsigned long line, const char *expr)
 		   line);
 	while (1) {
 		/* halt the core */
+		__asm__ volatile("ebreak");
 	}
 }
 

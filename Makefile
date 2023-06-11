@@ -23,7 +23,7 @@ OBJDUMP=${RISCV_PREFIX}objdump
 OBJCOPY=${RISCV_PREFIX}objcopy
 
 # Compilation flags
-ARCH=rv64imaczicsr
+ARCH=rv64imac_zicsr_zifencei
 ABI=lp64
 CMODEL=medany
 
@@ -33,24 +33,28 @@ CFLAGS =-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL} \
 	-Wall -Wextra -Werror \
 	-Wno-unused-parameter \
 	-Wshadow -fno-common \
-	-ffunction-sections -fdata-sections \
-	-ffreestanding \
 	-Wno-builtin-declaration-mismatch \
+	-ffreestanding \
 	-flto -fwhole-program \
 	--specs=nosys.specs \
-	-Wstack-usage=1024 -fstack-usage \
+	-Wstack-usage=256 -fstack-usage \
 	-fno-stack-protector \
 	-Os -g3
 
 ASFLAGS=-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL} \
 	-g3
-LDFLAGS=-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL} \
+LDFLAGS =-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL} \
 	-nostartfiles -ffreestanding \
-	-Wstack-usage=1024 -fstack-usage \
+	-Wstack-usage=256 -fstack-usage \
 	-fno-stack-protector \
 	-Wl,--gc-sections \
-	-flto \
-	-Tplat/${PLATFORM}/linker.ld
+	-flto -fwhole-program \
+	--specs=nosys.specs \
+	-Tplat/${PLATFORM}/linker.ld \
+	-ffunction-sections -fdata-sections \
+	-fcall-saved-s1 -fcall-saved-s2 -fcall-saved-s3 -fcall-saved-s4 \
+	-fcall-saved-s5 -fcall-saved-s6 -fcall-saved-s7 -fcall-saved-s8 \
+	-fcall-saved-s9 -fcall-saved-s10 -fcall-saved-s11
 
 # Sources
 vpath %.c src
@@ -85,8 +89,7 @@ bin: ${BIN}
 dasm: ${DA}
 
 size: ${ELF}
-	@printf "SIZE ${<F}\n"
-	@${SIZE} $<
+	${SIZE} $<
 
 format:
 	clang-format -i ${shell find -wholename "*.[chC]" -not -path '*/.*'}
@@ -98,24 +101,19 @@ ${BUILD}:
 	mkdir -p $@
 
 ${BUILD}/%.o: %.S | ${BUILD}
-	@printf "CC ${@F}\n"
-	@${CC} ${ASFLAGS} ${INC} -MMD -c -o $@ $<
+	${CC} ${ASFLAGS} ${INC} -MMD -c -o $@ $<
 
 ${BUILD}/%.o: %.c | ${BUILD}
-	@printf "CC ${@F}\n"
-	@${CC} ${CFLAGS} ${INC} -MMD -c -o $@ $<
+	${CC} ${CFLAGS} ${INC} -MMD -c -o $@ $<
 
 ${BUILD}/%.elf: ${OBJS}
-	@printf "CC ${@F}\n"
-	@${CC} ${LDFLAGS} -o $@ $^
+	${CC} ${LDFLAGS} -o $@ $^
 
 ${BUILD}/%.bin: ${OBJS}
-	@printf "OBJCOPY ${@F}\n"
-	@${OBJCOPY} -O binary $< $@
+	${OBJCOPY} -O binary $< $@
 
 ${BUILD}/%.da: ${BUILD}/%.elf
-	@printf "OBJDUMP ${@F}\n"
-	@${OBJDUMP} -S $< > $@
+	${OBJDUMP} -S $< > $@
 
 .PHONY: all options clean dasm docs test kernel size
 

@@ -16,6 +16,19 @@ uint64_t csrr_mip(void)
 	return val;
 }
 
+uint64_t csrr_mcycle(void)
+{
+	uint64_t val;
+	__asm__ volatile("csrr %0,mcycle"
+			 : "=r"(val));
+	return val;
+}
+
+void csrw_mstatus(uint64_t val)
+{
+	__asm__ volatile("csrw mstatus,%0" ::"r"(val));
+}
+
 uint64_t csrr_pmpcfg0(void)
 {
 	uint64_t val;

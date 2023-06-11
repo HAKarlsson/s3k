@@ -6,6 +6,7 @@
 #include "current.h"
 #include "proc.h"
 #include "time.h"
+#include "trap.h"
 #include "wfi.h"
 
 static uint16_t _frames[NUM_OF_HARTS][NUM_OF_FRAMES];
@@ -51,11 +52,8 @@ void schedule_init(void)
 
 void schedule_update(uint64_t pid, uint64_t end, uint64_t hartid, uint64_t from, uint64_t to)
 {
-	uint16_t fi = pid << 8 | end;
-	uint16_t *p = &_frames[hartid - MIN_HARTID][from];
-	uint16_t *ep = &_frames[hartid - MIN_HARTID][to];
-	while (p != ep)
-		*p++ = fi;
+	for (uint64_t i = from; i < to; ++i)
+		_frames[hartid - MIN_HARTID][i] = (pid << 8) | end;
 }
 
 void schedule_delete(uint64_t hartid, uint64_t from, uint64_t to)
@@ -105,8 +103,8 @@ retry: // Get the quantum.
 	timeout_set(hartid, start_time);
 
 	while (!(csrr_mip() & (1 << 7)))
-		wfi();
+		// wfi();
 
-	// Set end time.
-	timeout_set(hartid, end_time);
+		// Set end time.
+		timeout_set(hartid, end_time);
 }

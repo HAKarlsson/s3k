@@ -19,7 +19,7 @@ static cap_t cap_revoke_hook(uint64_t pid, cap_t cap, uint64_t revokedPid, cap_t
 static cap_t cap_restore_hook(uint64_t pid, cap_t cap);
 static cap_t cap_derive_hook(uint64_t pid, cap_t orig_cap, cap_t new_cap);
 
-excpt_t cap_get_cap(cptr_t cptr, uint64_t ret[1])
+int cap_get_cap(cptr_t cptr, uint64_t ret[1])
 {
 	// Assert that the capability pointer is valid.
 	kassert(cptr_is_valid(cptr));
@@ -27,17 +27,12 @@ excpt_t cap_get_cap(cptr_t cptr, uint64_t ret[1])
 	// Retreve the capability to read.
 	cap_t cap = ctable_get_cap(cptr);
 
-	// Check if the capability slot is empty.
-	if (ctable_is_null(cptr))
-		return EXCPT_EMPTY;
-
 	// Store the raw capability to return array.
 	ret[0] = cap.raw;
-
 	return EXCPT_NONE;
 }
 
-excpt_t cap_move(cptr_t src, cptr_t dest)
+int cap_move(cptr_t src, cptr_t dest)
 {
 	// Assert that the capability pointers are valid.
 	kassert(cptr_is_valid(src));
@@ -50,7 +45,7 @@ excpt_t cap_move(cptr_t src, cptr_t dest)
 	if (ctable_is_null(src))
 		return EXCPT_EMPTY;
 
-	// Check if the destination capbility is not empty.
+	// If the destination capbility is not empty.
 	if (!ctable_is_null(dest))
 		return EXCPT_COLLISION;
 
@@ -68,7 +63,7 @@ excpt_t cap_move(cptr_t src, cptr_t dest)
 	return EXCPT_NONE;
 }
 
-excpt_t cap_delete(cptr_t cptr)
+int cap_delete(cptr_t cptr)
 {
 	// Assert that the capability pointer is valid.
 	kassert(cptr_is_valid(cptr));
@@ -96,7 +91,7 @@ excpt_t cap_delete(cptr_t cptr)
 	return EXCPT_NONE;
 }
 
-excpt_t cap_revoke(cptr_t cptr)
+int cap_revoke(cptr_t cptr)
 {
 	// Assert that the capability pointer is valid.
 	kassert(cptr_is_valid(cptr));
@@ -141,6 +136,9 @@ excpt_t cap_revoke(cptr_t cptr)
 		cap_unlock();
 	}
 
+	if (preemption())
+		return EXCPT_PREEMPT;
+
 	// Acquire the capability lock and perform final restoration.
 	cap_lock();
 	if (!ctable_is_null(cptr)) {
@@ -154,7 +152,7 @@ excpt_t cap_revoke(cptr_t cptr)
 	return EXCPT_NONE;
 }
 
-excpt_t cap_derive(cptr_t orig, cptr_t dest, cap_t new_cap)
+int cap_derive(cptr_t orig, cptr_t dest, cap_t new_cap)
 {
 	// Assert that the capability pointers are valid.
 	kassert(cptr_is_valid(orig));
@@ -163,7 +161,6 @@ excpt_t cap_derive(cptr_t orig, cptr_t dest, cap_t new_cap)
 	// Retrieve the process ID and original capability associated with the original capability pointer.
 	uint64_t pid = cptr_get_pid(orig);
 	cap_t orig_cap = ctable_get_cap(orig);
-	uint32_t orig_depth = ctable_get_depth(orig);
 
 	// Check if the original capability pointer is empty (null).
 	if (ctable_is_null(orig))
@@ -173,13 +170,19 @@ excpt_t cap_derive(cptr_t orig, cptr_t dest, cap_t new_cap)
 	if (!ctable_is_null(dest))
 		return EXCPT_COLLISION;
 
+	if (preemption())
+		return EXCPT_PREEMPT;
+
 	// Check if the new capability can be derived from the original capability.
-	if (!cap_can_derive(orig_cap, new_cap)
-	    || orig_depth == CTABLE_MAX_DEPTH)
+	if (!cap_can_derive(orig_cap, new_cap))
 		return EXCPT_DERIVATION;
+
+	if (preemption())
+		return EXCPT_PREEMPT;
 
 	// Acquire the capability lock and perform the derivation.
 	cap_lock();
+	// If cptr point to null cap, it was revoked.
 	if (!ctable_is_null(orig)) {
 		ctable_insert(orig, dest, new_cap);
 		orig_cap = cap_derive_hook(pid, orig_cap, new_cap);
@@ -191,78 +194,101 @@ excpt_t cap_derive(cptr_t orig, cptr_t dest, cap_t new_cap)
 	return EXCPT_NONE;
 }
 
-excpt_t cap_pmp_set(cptr_t cptr, uint64_t index)
+int cap_pmp_set(cptr_t cptr, uint64_t index)
 {
+	// Assert that the capability pointer is valid.
 	kassert(cptr_is_valid(cptr));
 
-	uint64_t pid = cptr_get_pid(cptr);
-	proc_t *proc = proc_get(pid);
+	// Retrieve the capability
 	cap_t cap = ctable_get_cap(cptr);
+	// Get the pid of the capability
+	uint64_t pid = cptr_get_pid(cptr);
+	// Get the corresponding process
+	proc_t *proc = proc_get(pid);
 
+	// Check if capability is null.
 	if (ctable_is_null(cptr))
 		return EXCPT_EMPTY;
+
+	// Check if capability has the right type.
 	if (cap.type != CAPTY_PMP)
 		return EXCPT_INVALID_CAP;
+
+	// Check if we can set the pmp.
+	// If pmp cap is used, or index is ued, then collision.
 	if (proc_pmp_is_set(proc, index) || cap.pmp.used)
 		return EXCPT_COLLISION;
 
+	// Acquire the capability lock.
 	cap_lock();
+	// If cptr point to null cap, then it was revoked.
 	if (!ctable_is_null(cptr)) {
+		// If cap still exists, perform the pmp set.
 		proc_pmp_set(proc, index, cap.pmp.addr, cap.pmp.rwx);
 		cap.pmp.index = index;
 		cap.pmp.used = 1;
 		ctable_update(cptr, cap);
 	}
+	// Release the capability lock.
 	cap_unlock();
 	return EXCPT_NONE;
 }
 
-excpt_t cap_pmp_clear(cptr_t cptr)
+int cap_pmp_clear(cptr_t cptr)
 {
 	kassert(cptr_is_valid(cptr));
 
+	cap_t cap = ctable_get_cap(cptr);
 	uint64_t pid = cptr_get_pid(cptr);
 	proc_t *proc = proc_get(pid);
-	cap_t cap = ctable_get_cap(cptr);
 
 	if (ctable_is_null(cptr))
 		return EXCPT_EMPTY;
+
+	// Check if capability has the right type.
 	if (cap.type != CAPTY_PMP)
 		return EXCPT_INVALID_CAP;
+
+	// If already clear, nothing happens.
 	if (!cap.pmp.used)
 		return EXCPT_NONE;
 
+	// Acquire the capability lock.
 	cap_lock();
+	// If cptr point to null cap, then it was revoked.
 	if (!ctable_is_null(cptr)) {
+		// If cap still exists, perform the pmp clear.
 		proc_pmp_clear(proc, cap.pmp.index);
 		cap.pmp.index = 0;
 		cap.pmp.used = 0;
 		ctable_update(cptr, cap);
 	}
+	// Release the capability lock.
 	cap_unlock();
 	return EXCPT_NONE;
 }
 
-bool monitor_validate(cptr_t cptr, uint64_t pid)
+int monitor_validate(cptr_t mon_cptr, uint64_t pid)
 {
-	cap_t cap = ctable_get_cap(cptr);
-	if (ctable_is_null(cptr))
+	cap_t cap = ctable_get_cap(mon_cptr);
+	if (cap.type == CAPTY_NULL)
 		return EXCPT_EMPTY;
 	if (cap.type != CAPTY_MONITOR)
 		return EXCPT_INVALID_CAP;
-	if (pid < cap.monitor.free || pid >= cap.monitor.end)
+	uint64_t free = cap.monitor.base + cap.monitor.allocated;
+	uint64_t end = cap.monitor.base + cap.monitor.length;
+	if (pid < free || pid >= end)
 		return EXCPT_MONITOR_PID;
 	return EXCPT_NONE;
 }
 
-excpt_t cap_monitor_suspend(cptr_t mon_cptr, uint64_t pid)
+int cap_monitor_suspend(cptr_t mon_cptr, uint64_t pid)
 {
 	kassert(cptr_is_valid(mon_cptr));
 
-	excpt_t error = monitor_validate(mon_cptr, pid);
+	int error = monitor_validate(mon_cptr, pid);
 	if (error)
 		return error;
-
 	proc_t *proc = proc_get(pid);
 
 	cap_lock();
@@ -275,14 +301,13 @@ excpt_t cap_monitor_suspend(cptr_t mon_cptr, uint64_t pid)
 	return error;
 }
 
-excpt_t cap_monitor_resume(cptr_t mon_cptr, uint64_t pid)
+int cap_monitor_resume(cptr_t mon_cptr, uint64_t pid)
 {
 	kassert(cptr_is_valid(mon_cptr));
 
-	excpt_t error = monitor_validate(mon_cptr, pid);
+	int error = monitor_validate(mon_cptr, pid);
 	if (error)
 		return error;
-
 	proc_t *proc = proc_get(pid);
 
 	cap_lock();
@@ -295,12 +320,12 @@ excpt_t cap_monitor_resume(cptr_t mon_cptr, uint64_t pid)
 	return error;
 }
 
-excpt_t cap_monitor_get_reg(cptr_t mon_cptr, uint64_t pid, uint64_t reg, uint64_t ret[1])
+int cap_monitor_get_reg(cptr_t mon_cptr, uint64_t pid, uint64_t reg, uint64_t ret[1])
 {
 	kassert(cptr_is_valid(mon_cptr));
 	kassert(reg < NUM_OF_REGS);
 
-	excpt_t error = monitor_validate(mon_cptr, pid);
+	int error = monitor_validate(mon_cptr, pid);
 	if (error)
 		return error;
 	proc_t *proc = proc_get(pid);
@@ -318,12 +343,12 @@ excpt_t cap_monitor_get_reg(cptr_t mon_cptr, uint64_t pid, uint64_t reg, uint64_
 	return error;
 }
 
-excpt_t cap_monitor_set_reg(cptr_t mon_cptr, uint64_t pid, uint64_t reg, uint64_t val)
+int cap_monitor_set_reg(cptr_t mon_cptr, uint64_t pid, uint64_t reg, uint64_t val)
 {
 	kassert(cptr_is_valid(mon_cptr));
 	kassert(reg < NUM_OF_REGS);
 
-	excpt_t error = monitor_validate(mon_cptr, pid);
+	int error = monitor_validate(mon_cptr, pid);
 	if (error)
 		return error;
 	proc_t *proc = proc_get(pid);
@@ -341,11 +366,12 @@ excpt_t cap_monitor_set_reg(cptr_t mon_cptr, uint64_t pid, uint64_t reg, uint64_
 	return error;
 }
 
-excpt_t cap_monitor_get_cap(cptr_t mon_cptr, uint64_t pid, uint64_t cidx, uint64_t ret[1])
+int cap_monitor_get_cap(cptr_t mon_cptr, uint64_t pid, cptr_t cptr, uint64_t ret[1])
 {
 	kassert(cptr_is_valid(mon_cptr));
+	kassert(cptr_is_valid(cptr));
 
-	excpt_t error = monitor_validate(mon_cptr, pid);
+	int error = monitor_validate(mon_cptr, pid);
 	if (error)
 		return error;
 	proc_t *proc = proc_get(pid);
@@ -356,7 +382,6 @@ excpt_t cap_monitor_get_cap(cptr_t mon_cptr, uint64_t pid, uint64_t cidx, uint64
 	} else if (!proc_monitor_acquire(proc)) {
 		error = EXCPT_MONITOR_BUSY;
 	} else {
-		cptr_t cptr = cptr_mk(pid, cidx);
 		cap_t cap = ctable_get_cap(cptr);
 		ret[0] = cap.raw;
 		proc_release(proc);
@@ -365,34 +390,99 @@ excpt_t cap_monitor_get_cap(cptr_t mon_cptr, uint64_t pid, uint64_t cidx, uint64
 	return error;
 }
 
-excpt_t cap_monitor_move_cap(cptr_t mon_cptr, uint64_t pid, uint64_t src_cidx, uint64_t dest_cidx, bool take)
+int cap_monitor_move_cap(cptr_t mon_cptr, uint64_t pid, cptr_t src_cptr, cptr_t dest_cptr)
 {
 	kassert(cptr_is_valid(mon_cptr));
+	kassert(cptr_is_valid(src_cptr));
+	kassert(cptr_is_valid(dest_cptr));
 
-	excpt_t error = monitor_validate(mon_cptr, pid);
+	int error = monitor_validate(mon_cptr, pid);
 	if (error)
 		return error;
-
 	proc_t *proc = proc_get(pid);
 
-	uint64_t src_pid = take ? pid : cptr_get_pid(mon_cptr);
-	uint64_t dest_pid = take ? cptr_get_pid(mon_cptr) : pid;
-	cptr_t src = cptr_mk(src_pid, src_cidx);
-	cptr_t dest = cptr_mk(dest_pid, dest_cidx);
+	uint64_t src_pid = cptr_get_pid(src_cptr);
+	uint64_t dest_pid = cptr_get_pid(dest_cptr);
 
 	cap_lock();
 	if (ctable_is_null(mon_cptr)) {
 		error = EXCPT_EMPTY;
-	} else if (ctable_is_null(src)) {
+	} else if (ctable_is_null(src_cptr)) {
 		error = EXCPT_MONITOR_EMPTY;
-	} else if (!ctable_is_null(dest)) {
+	} else if (!ctable_is_null(dest_cptr)) {
 		error = EXCPT_MONITOR_COLLISION;
 	} else if (!proc_monitor_acquire(proc)) {
 		error = EXCPT_MONITOR_BUSY;
 	} else {
-		cap_t cap = ctable_get_cap(src);
-		ctable_move(src, dest, cap);
+		cap_t cap = ctable_get_cap(src_cptr);
+		ctable_move(src_cptr, dest_cptr, cap);
 		cap_move_hook(src_pid, dest_pid, cap);
+		proc_release(proc);
+	}
+	cap_unlock();
+	return error;
+}
+
+int cap_monitor_pmp_set(cptr_t mon_cptr, uint64_t pid, cptr_t pmp_cptr, uint64_t index)
+{
+	kassert(cptr_is_valid(mon_cptr));
+	kassert(cptr_is_valid(pmp_cptr));
+
+	int error = monitor_validate(mon_cptr, pid);
+	if (error)
+		return error;
+	proc_t *proc = proc_get(pid);
+
+	cap_lock();
+	cap_t pmp_cap = ctable_get_cap(pmp_cptr);
+	if (ctable_is_null(mon_cptr)) {
+		error = EXCPT_EMPTY;
+	} else if (ctable_is_null(pmp_cptr)) {
+		error = EXCPT_MONITOR_EMPTY;
+	} else if (pmp_cap.type != CAPTY_PMP) {
+		error = EXCPT_INVALID_CAP;
+	} else if (pmp_cap.pmp.used || proc_pmp_is_set(proc, index)) {
+		error = EXCPT_COLLISION;
+	} else if (!proc_monitor_acquire(proc)) {
+		error = EXCPT_MONITOR_BUSY;
+	} else {
+		proc_pmp_set(proc, index, pmp_cap.pmp.addr, pmp_cap.pmp.rwx);
+		pmp_cap.pmp.used = 1;
+		pmp_cap.pmp.index = index;
+		ctable_update(pmp_cptr, pmp_cap);
+		proc_release(proc);
+	}
+	cap_unlock();
+	return error;
+}
+
+int cap_monitor_pmp_clear(cptr_t mon_cptr, uint64_t pid, cptr_t pmp_cptr)
+{
+	kassert(cptr_is_valid(mon_cptr));
+	kassert(cptr_is_valid(pmp_cptr));
+
+	int error = monitor_validate(mon_cptr, pid);
+	if (error)
+		return error;
+	proc_t *proc = proc_get(pid);
+
+	cap_lock();
+	cap_t pmp_cap = ctable_get_cap(pmp_cptr);
+	if (ctable_is_null(mon_cptr)) {
+		error = EXCPT_EMPTY;
+	} else if (ctable_is_null(pmp_cptr)) {
+		error = EXCPT_MONITOR_EMPTY;
+	} else if (pmp_cap.type != CAPTY_PMP) {
+		error = EXCPT_INVALID_CAP;
+	} else if (!pmp_cap.pmp.used) {
+		error = EXCPT_NONE;
+	} else if (!proc_monitor_acquire(proc)) {
+		error = EXCPT_MONITOR_BUSY;
+	} else {
+		proc_pmp_clear(proc, pmp_cap.pmp.index);
+		pmp_cap.pmp.used = 0;
+		pmp_cap.pmp.index = 0;
+		ctable_update(pmp_cptr, pmp_cap);
 		proc_release(proc);
 	}
 	cap_unlock();
@@ -416,10 +506,13 @@ cap_t cap_move_hook(uint64_t src_pid, uint64_t dest_pid, cap_t cap)
 
 	switch (cap.type) {
 	case CAPTY_TIME: {
-		uint64_t end = cap.time.end;
+		uint64_t end = cap.time.base + cap.time.length;
+		;
 		uint64_t hartid = cap.time.hartid;
-		uint64_t from = cap.time.free;
-		uint64_t to = cap.time.end;
+		uint64_t from = cap.time.base + cap.time.allocated;
+		;
+		uint64_t to = cap.time.base + cap.time.length;
+		;
 		schedule_update(dest_pid, end, hartid, from, to);
 	} break;
 
@@ -439,11 +532,15 @@ void cap_delete_hook(uint64_t pid, cap_t cap)
 {
 	switch (cap.type) {
 	case CAPTY_TIME: {
-		schedule_delete(cap.time.hartid, cap.time.free, cap.time.end);
+		uint64_t hartid = cap.time.hartid;
+		uint64_t from = cap.time.base + cap.time.allocated;
+		uint64_t to = cap.time.base + cap.time.length;
+		schedule_delete(hartid, from, to);
 	} break;
 
 	case CAPTY_PMP: {
-		proc_pmp_clear(proc_get(pid), cap.pmp.index);
+		if (cap.pmp.used)
+			proc_pmp_clear(proc_get(pid), cap.pmp.index);
 	} break;
 	}
 }
@@ -452,13 +549,16 @@ cap_t cap_revoke_hook(uint64_t pid, cap_t cap, uint64_t rev_pid, cap_t rev_cap)
 {
 	switch (rev_cap.type) {
 	case CAPTY_TIME: {
-		schedule_update(pid, cap.time.end,
-				cap.time.hartid, rev_cap.time.begin, cap.time.free);
-		cap.time.free = rev_cap.time.begin;
+		uint64_t end = cap.time.base + cap.time.length;
+		uint64_t hartid = cap.time.hartid;
+		uint64_t from = cap.time.base + cap.time.allocated;
+		uint64_t to = cap.time.base + cap.time.length;
+		schedule_update(pid, end, hartid, from, to);
+		cap.time.allocated = rev_cap.time.base - cap.time.base;
 	} break;
 
 	case CAPTY_MEMORY: {
-		cap.memory.free = rev_cap.memory.begin;
+		cap.memory.allocated = rev_cap.memory.base - cap.memory.base;
 		cap.memory.lock = rev_cap.memory.lock;
 	} break;
 
@@ -469,11 +569,11 @@ cap_t cap_revoke_hook(uint64_t pid, cap_t cap, uint64_t rev_pid, cap_t rev_cap)
 	} break;
 
 	case CAPTY_MONITOR: {
-		cap.monitor.free = rev_cap.monitor.begin;
+		cap.monitor.allocated = rev_cap.monitor.base - cap.monitor.base;
 	} break;
 
 	case CAPTY_CHANNEL: {
-		cap.channel.free = rev_cap.channel.begin;
+		cap.channel.allocated = rev_cap.channel.base - cap.channel.base;
 	} break;
 	}
 	return cap;
@@ -483,21 +583,25 @@ cap_t cap_restore_hook(uint64_t pid, cap_t cap)
 {
 	switch (cap.type) {
 	case CAPTY_TIME: {
-		schedule_update(pid, cap.time.end,
-				cap.time.hartid, cap.time.begin, cap.time.free);
-		cap.time.free = cap.time.begin;
+		uint64_t end = cap.time.base + cap.time.length;
+		uint64_t hartid = cap.time.hartid;
+		uint64_t from = cap.time.base;
+		uint64_t to = cap.time.base + cap.time.allocated;
+		schedule_update(pid, end,
+				hartid, from, to);
+		cap.time.allocated = 0;
 	} break;
 
 	case CAPTY_MEMORY: {
-		cap.memory.free = cap.memory.begin;
+		cap.memory.allocated = 0;
 	} break;
 
 	case CAPTY_MONITOR: {
-		cap.monitor.free = cap.monitor.begin;
+		cap.monitor.allocated = 0;
 	} break;
 
 	case CAPTY_CHANNEL: {
-		cap.channel.free = cap.channel.begin;
+		cap.channel.allocated = 0;
 	} break;
 	}
 	return cap;
@@ -507,25 +611,29 @@ cap_t cap_derive_hook(uint64_t pid, cap_t orig_cap, cap_t new_cap)
 {
 	switch (new_cap.type) {
 	case CAPTY_TIME: {
-		schedule_update(pid, new_cap.time.end,
-				new_cap.time.hartid, new_cap.time.begin, new_cap.time.end);
-		orig_cap.time.free = new_cap.time.end;
+		uint64_t end = new_cap.time.base + new_cap.time.length;
+		uint64_t hartid = new_cap.time.hartid;
+		uint64_t from = new_cap.time.base;
+		uint64_t to = new_cap.time.base + new_cap.time.length;
+		schedule_update(pid, end, hartid, from, to);
+		uint64_t allocated = orig_cap.time.allocated + new_cap.time.length;
+		orig_cap.time.allocated = allocated;
 	} break;
 	case CAPTY_MEMORY: {
-		orig_cap.memory.free = new_cap.memory.end;
+		orig_cap.memory.allocated += new_cap.memory.length;
 	} break;
 	case CAPTY_PMP: {
 		orig_cap.memory.lock = 1;
 	} break;
 	case CAPTY_MONITOR: {
-		orig_cap.monitor.free = new_cap.monitor.end;
+		orig_cap.monitor.allocated += new_cap.monitor.length;
 	} break;
 	case CAPTY_CHANNEL: {
-		orig_cap.channel.free = new_cap.channel.end;
+		orig_cap.monitor.allocated = new_cap.monitor.base - orig_cap.monitor.base;
 	} break;
 	case CAPTY_SOCKET: {
 		if (new_cap.socket.tag == 0)
-			orig_cap.channel.free = new_cap.socket.channel + 1;
+			orig_cap.channel.allocated++;
 	} break;
 	}
 	return orig_cap;

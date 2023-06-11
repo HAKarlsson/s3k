@@ -21,6 +21,10 @@ uint64_t csrr_mhartid(void);
  */
 uint64_t csrr_mip(void);
 
+uint64_t csrr_mcycle(void);
+
+void csrw_mstatus(uint64_t val);
+
 /**
  * @brief Read the PMP configuration register 0 (pmpcfg0).
  *
