@@ -103,8 +103,8 @@ retry: // Get the quantum.
 	timeout_set(hartid, start_time);
 
 	while (!(csrr_mip() & (1 << 7)))
-		// wfi();
+		wfi();
 
-		// Set end time.
-		timeout_set(hartid, end_time);
+	// Set end time.
+	timeout_set(hartid, end_time);
 }

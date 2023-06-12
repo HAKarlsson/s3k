@@ -5,7 +5,7 @@
 #include "init_caps.h"
 #include "kassert.h"
 
-static cte_t ctable[NUM_OF_PROCESSES * NUM_OF_CAPABILITIES];
+cte_t ctable[NUM_OF_PROCESSES * NUM_OF_CAPABILITIES];
 
 void ctable_init(void)
 {
@@ -16,24 +16,6 @@ void ctable_init(void)
 	}
 	ctable[0].prev = ARRAY_SIZE(init_caps) - 1;
 	ctable[ARRAY_SIZE(init_caps) - 1].next = 0;
-}
-
-bool ctable_is_null(cptr_t cptr)
-{
-	kassert(cptr_is_valid(cptr));
-	return ctable[cptr].cap.raw == 0;
-}
-
-cap_t ctable_get_cap(cptr_t cptr)
-{
-	kassert(cptr_is_valid(cptr));
-	return ctable[cptr].cap;
-}
-
-cptr_t ctable_get_next(cptr_t cptr)
-{
-	kassert(cptr_is_valid(cptr));
-	return ctable[cptr].next;
 }
 
 void ctable_move(cptr_t src, cptr_t dst, cap_t cap)

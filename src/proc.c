@@ -112,3 +112,16 @@ bool proc_pmp_is_set(proc_t *proc, uint64_t index)
 {
 	return proc->pmpcfg[index] != 0;
 }
+
+void proc_pmp_load(proc_t *proc)
+{
+	csrw_pmpcfg0(*((uint64_t *)proc->pmpcfg));
+	csrw_pmpaddr0(proc->pmpaddr[0]);
+	csrw_pmpaddr1(proc->pmpaddr[1]);
+	csrw_pmpaddr2(proc->pmpaddr[2]);
+	csrw_pmpaddr3(proc->pmpaddr[3]);
+	csrw_pmpaddr4(proc->pmpaddr[4]);
+	csrw_pmpaddr5(proc->pmpaddr[5]);
+	csrw_pmpaddr6(proc->pmpaddr[6]);
+	csrw_pmpaddr7(proc->pmpaddr[7]);
+}

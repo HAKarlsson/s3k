@@ -28,45 +28,32 @@ ABI=lp64
 CMODEL=medany
 
 INC =-include plat/${PLATFORM}/platform.h -include ${CONFIG_H} -Iinc -Iplat/${PLATFORM}
-CFLAGS =-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL} \
-        -std=c11 \
-	-Wall -Wextra -Werror \
-	-Wno-unused-parameter \
-	-Wshadow -fno-common \
-	-Wno-builtin-declaration-mismatch \
-	-ffreestanding \
-	-flto -fwhole-program \
-	--specs=nosys.specs \
-	-Wstack-usage=256 -fstack-usage \
-	-fno-stack-protector \
-	-Os -g3
-
-ASFLAGS=-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL} \
-	-g3
-LDFLAGS =-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL} \
-	-nostartfiles -ffreestanding \
-	-Wstack-usage=256 -fstack-usage \
-	-fno-stack-protector \
-	-Wl,--gc-sections \
-	-flto -fwhole-program \
-	--specs=nosys.specs \
-	-Tplat/${PLATFORM}/linker.ld \
-	-ffunction-sections -fdata-sections \
-	-fcall-saved-s1 -fcall-saved-s2 -fcall-saved-s3 -fcall-saved-s4 \
-	-fcall-saved-s5 -fcall-saved-s6 -fcall-saved-s7 -fcall-saved-s8 \
-	-fcall-saved-s9 -fcall-saved-s10 -fcall-saved-s11
+CFLAGS =-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL}
+CFLAGS+=-std=c11
+CFLAGS+=-Wall -Wextra -Werror
+CFLAGS+=-Wno-unused-parameter
+CFLAGS+=-Wshadow -fno-common
+CFLAGS+=-Wno-builtin-declaration-mismatch
+CFLAGS+=-Os -g3
+CFLAGS+=-nostartfiles -ffreestanding
+CFLAGS+=-Wstack-usage=256 -fstack-usage
+CFLAGS+=-fno-stack-protector
+CFLAGS+=-Wl,--gc-sections
+CFLAGS+=-flto -fwhole-program
+CFLAGS+=--specs=nosys.specs
+CFLAGS+=-Tplat/${PLATFORM}/linker.ld
+CFLAGS+=-ffunction-sections -fdata-sections
 
 # Sources
 vpath %.c src
 vpath %.S src
 
-SRCS=head.S trap.S csr.c current.c exception.c proc.c \
-     cap_table.c cap_operations.c cap_utils.c \
-     info.c ipc.c schedule.c syscall.c wfi.c altio.c kassert.c preemption.c
-OBJS=${patsubst %.S, ${BUILD}/%.o, ${patsubst %.c, ${BUILD}/%.o, ${SRCS}}}
-DEPS=${OBJS:.o=.d}
+SRCS=head.S trap.S altio.c cap_operations.c cap_table.c cap_utils.c csr.c \
+     current.c exception.c info.c ipc.c kassert.c preemption.c proc.c \
+     schedule.c syscall.c wfi.c
 
 ELF=${BUILD}/${PROGRAM}.elf
+DEP=${BUILD}/${PROGRAM}.d
 BIN=${BUILD}/${PROGRAM}.bin
 DA=${BUILD}/${PROGRAM}.da
 
@@ -74,13 +61,12 @@ all: options kernel dasm size
 
 options:
 	@printf "build options:\n"
-	@printf "CC        = ${CC}\n"
-	@printf "LDFLAGS   = ${LDFLAGS}\n"
-	@printf "ASFLAGS   = ${ASFLAGS}\n"
-	@printf "CFLAGS    = ${CFLAGS}\n"
-	@printf "INC       = ${INC}\n"
-	@printf "CONFIG_H  = ${abspath ${CONFIG_H}}\n"
-	@printf "BUILD     = ${abspath ${BUILD}}\n"
+	@printf "CC       = ${CC}\n"
+	@printf "CFLAGS   = ${CFLAGS}\n"
+	@printf "INC      = ${INC}\n"
+	@printf "PLATFORM = ${PLATFORM}\n"
+	@printf "CONFIG_H = ${abspath ${CONFIG_H}}\n"
+	@printf "BUILD    = ${abspath ${BUILD}}\n"
 
 elf: ${ELF}
 
@@ -95,19 +81,13 @@ format:
 	clang-format -i ${shell find -wholename "*.[chC]" -not -path '*/.*'}
 
 clean:
-	rm -rf ${BUILD}
+	rm -f ${ELF} ${DEP} ${BIN} ${DA}
 
 ${BUILD}:
 	mkdir -p $@
 
-${BUILD}/%.o: %.S | ${BUILD}
-	${CC} ${ASFLAGS} ${INC} -MMD -c -o $@ $<
-
-${BUILD}/%.o: %.c | ${BUILD}
-	${CC} ${CFLAGS} ${INC} -MMD -c -o $@ $<
-
-${BUILD}/%.elf: ${OBJS}
-	${CC} ${LDFLAGS} -o $@ $^
+${BUILD}/%.elf: ${SRCS} | ${BUILD}
+	${CC} ${CFLAGS} ${INC} -MMD -o $@ ${filter-out %.h, $^}
 
 ${BUILD}/%.bin: ${OBJS}
 	${OBJCOPY} -O binary $< $@
@@ -117,4 +97,4 @@ ${BUILD}/%.da: ${BUILD}/%.elf
 
 .PHONY: all options clean dasm docs test kernel size
 
--include ${DEPS}
+-include ${DEP}

@@ -14,8 +14,8 @@ typedef struct {
 	uint64_t unused : 4;
 	uint64_t hartid : 8;
 	uint64_t base : 16;
-	uint64_t allocated : 16;
-	uint64_t length : 16;
+	uint64_t alloc : 16;
+	uint64_t len : 16;
 } cap_time_t;
 
 typedef struct {
@@ -23,15 +23,15 @@ typedef struct {
 	uint64_t rwx : 3;
 	uint64_t lock : 1;
 	uint64_t base : 24;
-	uint64_t allocated : 16;
-	uint64_t length : 16;
+	uint64_t alloc : 16;
+	uint64_t len : 16;
 } cap_memory_t;
 
 typedef struct {
 	uint64_t type : 4;
 	uint64_t rwx : 3;
 	uint64_t used : 1;
-	uint64_t index : 4;
+	uint64_t index : 8;
 	uint64_t addr : 48;
 } cap_pmp_t;
 
@@ -39,16 +39,16 @@ typedef struct {
 	uint64_t type : 4;
 	uint64_t unused : 12;
 	uint64_t base : 16;
-	uint64_t allocated : 16;
-	uint64_t length : 16;
+	uint64_t alloc : 16;
+	uint64_t len : 16;
 } cap_monitor_t;
 
 typedef struct {
 	uint64_t type : 4;
 	uint64_t unused : 12;
 	uint64_t base : 16;
-	uint64_t allocated : 16;
-	uint64_t length : 16;
+	uint64_t alloc : 16;
+	uint64_t len : 16;
 } cap_channel_t;
 
 typedef struct {

@@ -225,6 +225,7 @@ int cap_pmp_set(cptr_t cptr, uint64_t index)
 	if (!ctable_is_null(cptr)) {
 		// If cap still exists, perform the pmp set.
 		proc_pmp_set(proc, index, cap.pmp.addr, cap.pmp.rwx);
+		proc_pmp_load(proc);
 		cap.pmp.index = index;
 		cap.pmp.used = 1;
 		ctable_update(cptr, cap);
@@ -259,6 +260,7 @@ int cap_pmp_clear(cptr_t cptr)
 	if (!ctable_is_null(cptr)) {
 		// If cap still exists, perform the pmp clear.
 		proc_pmp_clear(proc, cap.pmp.index);
+		proc_pmp_load(proc);
 		cap.pmp.index = 0;
 		cap.pmp.used = 0;
 		ctable_update(cptr, cap);
@@ -275,8 +277,8 @@ int monitor_validate(cptr_t mon_cptr, uint64_t pid)
 		return EXCPT_EMPTY;
 	if (cap.type != CAPTY_MONITOR)
 		return EXCPT_INVALID_CAP;
-	uint64_t free = cap.monitor.base + cap.monitor.allocated;
-	uint64_t end = cap.monitor.base + cap.monitor.length;
+	uint64_t free = cap.monitor.base + cap.monitor.alloc;
+	uint64_t end = cap.monitor.base + cap.monitor.len;
 	if (pid < free || pid >= end)
 		return EXCPT_MONITOR_PID;
 	return EXCPT_NONE;
@@ -506,12 +508,12 @@ cap_t cap_move_hook(uint64_t src_pid, uint64_t dest_pid, cap_t cap)
 
 	switch (cap.type) {
 	case CAPTY_TIME: {
-		uint64_t end = cap.time.base + cap.time.length;
+		uint64_t end = cap.time.base + cap.time.len;
 		;
 		uint64_t hartid = cap.time.hartid;
-		uint64_t from = cap.time.base + cap.time.allocated;
+		uint64_t from = cap.time.base + cap.time.alloc;
 		;
-		uint64_t to = cap.time.base + cap.time.length;
+		uint64_t to = cap.time.base + cap.time.len;
 		;
 		schedule_update(dest_pid, end, hartid, from, to);
 	} break;
@@ -533,8 +535,8 @@ void cap_delete_hook(uint64_t pid, cap_t cap)
 	switch (cap.type) {
 	case CAPTY_TIME: {
 		uint64_t hartid = cap.time.hartid;
-		uint64_t from = cap.time.base + cap.time.allocated;
-		uint64_t to = cap.time.base + cap.time.length;
+		uint64_t from = cap.time.base + cap.time.alloc;
+		uint64_t to = cap.time.base + cap.time.len;
 		schedule_delete(hartid, from, to);
 	} break;
 
@@ -549,16 +551,16 @@ cap_t cap_revoke_hook(uint64_t pid, cap_t cap, uint64_t rev_pid, cap_t rev_cap)
 {
 	switch (rev_cap.type) {
 	case CAPTY_TIME: {
-		uint64_t end = cap.time.base + cap.time.length;
+		uint64_t end = cap.time.base + cap.time.len;
 		uint64_t hartid = cap.time.hartid;
-		uint64_t from = cap.time.base + cap.time.allocated;
-		uint64_t to = cap.time.base + cap.time.length;
+		uint64_t from = cap.time.base + cap.time.alloc;
+		uint64_t to = cap.time.base + cap.time.len;
 		schedule_update(pid, end, hartid, from, to);
-		cap.time.allocated = rev_cap.time.base - cap.time.base;
+		cap.time.alloc = rev_cap.time.base - cap.time.base;
 	} break;
 
 	case CAPTY_MEMORY: {
-		cap.memory.allocated = rev_cap.memory.base - cap.memory.base;
+		cap.memory.alloc = rev_cap.memory.base - cap.memory.base;
 		cap.memory.lock = rev_cap.memory.lock;
 	} break;
 
@@ -569,11 +571,11 @@ cap_t cap_revoke_hook(uint64_t pid, cap_t cap, uint64_t rev_pid, cap_t rev_cap)
 	} break;
 
 	case CAPTY_MONITOR: {
-		cap.monitor.allocated = rev_cap.monitor.base - cap.monitor.base;
+		cap.monitor.alloc = rev_cap.monitor.base - cap.monitor.base;
 	} break;
 
 	case CAPTY_CHANNEL: {
-		cap.channel.allocated = rev_cap.channel.base - cap.channel.base;
+		cap.channel.alloc = rev_cap.channel.base - cap.channel.base;
 	} break;
 	}
 	return cap;
@@ -583,25 +585,25 @@ cap_t cap_restore_hook(uint64_t pid, cap_t cap)
 {
 	switch (cap.type) {
 	case CAPTY_TIME: {
-		uint64_t end = cap.time.base + cap.time.length;
+		uint64_t end = cap.time.base + cap.time.len;
 		uint64_t hartid = cap.time.hartid;
 		uint64_t from = cap.time.base;
-		uint64_t to = cap.time.base + cap.time.allocated;
+		uint64_t to = cap.time.base + cap.time.alloc;
 		schedule_update(pid, end,
 				hartid, from, to);
-		cap.time.allocated = 0;
+		cap.time.alloc = 0;
 	} break;
 
 	case CAPTY_MEMORY: {
-		cap.memory.allocated = 0;
+		cap.memory.alloc = 0;
 	} break;
 
 	case CAPTY_MONITOR: {
-		cap.monitor.allocated = 0;
+		cap.monitor.alloc = 0;
 	} break;
 
 	case CAPTY_CHANNEL: {
-		cap.channel.allocated = 0;
+		cap.channel.alloc = 0;
 	} break;
 	}
 	return cap;
@@ -611,29 +613,28 @@ cap_t cap_derive_hook(uint64_t pid, cap_t orig_cap, cap_t new_cap)
 {
 	switch (new_cap.type) {
 	case CAPTY_TIME: {
-		uint64_t end = new_cap.time.base + new_cap.time.length;
+		uint64_t end = new_cap.time.base + new_cap.time.len;
 		uint64_t hartid = new_cap.time.hartid;
 		uint64_t from = new_cap.time.base;
-		uint64_t to = new_cap.time.base + new_cap.time.length;
+		uint64_t to = new_cap.time.base + new_cap.time.len;
 		schedule_update(pid, end, hartid, from, to);
-		uint64_t allocated = orig_cap.time.allocated + new_cap.time.length;
-		orig_cap.time.allocated = allocated;
+		orig_cap.time.alloc += new_cap.time.len;
 	} break;
 	case CAPTY_MEMORY: {
-		orig_cap.memory.allocated += new_cap.memory.length;
+		orig_cap.memory.alloc += new_cap.memory.len;
 	} break;
 	case CAPTY_PMP: {
 		orig_cap.memory.lock = 1;
 	} break;
 	case CAPTY_MONITOR: {
-		orig_cap.monitor.allocated += new_cap.monitor.length;
+		orig_cap.monitor.alloc += new_cap.monitor.len;
 	} break;
 	case CAPTY_CHANNEL: {
-		orig_cap.monitor.allocated = new_cap.monitor.base - orig_cap.monitor.base;
+		orig_cap.channel.alloc += new_cap.channel.len;
 	} break;
 	case CAPTY_SOCKET: {
 		if (new_cap.socket.tag == 0)
-			orig_cap.channel.allocated++;
+			orig_cap.channel.alloc++;
 	} break;
 	}
 	return orig_cap;

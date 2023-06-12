@@ -127,3 +127,4 @@ bool proc_ipc_acquire(proc_t *proc, uint64_t channel_id);
 void proc_pmp_set(proc_t *proc, uint64_t index, uint64_t addr, uint64_t rwx);
 void proc_pmp_clear(proc_t *proc, uint64_t index);
 bool proc_pmp_is_set(proc_t *proc, uint64_t index);
+void proc_pmp_load(proc_t *proc);
