@@ -119,7 +119,7 @@ bool cap_can_derive(cap_t a, cap_t b)
 			uint64_t b_base, b_size;
 			pmp_napot_decode(b.pmp.addr, &b_base, &b_size);
 			uint64_t b_rwx = b.pmp.rwx;
-			
+
 			return a_free <= b_base && (b_base + b_size) <= a_end
 			       && subset(b_rwx, a_rwx);
 		}

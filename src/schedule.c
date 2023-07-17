@@ -24,7 +24,7 @@ static uint64_t _timestamp;
  * 3. A hart with the lowest hart ID has the higher priority.
  * The rules are enforced in above order.
  *
- * This function enforces rules 2 and 3. The first rule is enforced using a 
+ * This function enforces rules 2 and 3. The first rule is enforced using a
  * lock on the process. If the process is running on another hart, that
  * hart will have a lock on that process and continue running.
  */
@@ -76,7 +76,8 @@ uint64_t _get_frame_info(frame_info_t frame_info[NUM_OF_HARTS], uint64_t frame)
 proc_t *schedule_get(uint64_t hartid, uint64_t current_time, uint64_t *start_time, uint64_t *end_time)
 {
 	// Calculate the current frame
-	uint64_t start_frame = _get_quantum(current_time);;
+	uint64_t start_frame = _get_quantum(current_time);
+	;
 
 	frame_info_t frame_info[NUM_OF_HARTS];
 
@@ -90,7 +91,6 @@ proc_t *schedule_get(uint64_t hartid, uint64_t current_time, uint64_t *start_tim
 	// Check if hart has priority on the process.
 	if (!_has_priority(frame_info, hartid))
 		return NULL;
-
 
 	// Get the frame information
 	uint64_t pid = frame_info[hartid].pid;
@@ -121,7 +121,7 @@ void schedule_init(void)
 void schedule_update(uint64_t pid, uint64_t end, uint64_t hartid, uint64_t from, uint64_t to)
 {
 	for (uint64_t i = from; i < to; ++i) {
-		_frames[i][hartid - MIN_HARTID] = (frame_info_t){.pid = pid, .end = end};
+		_frames[i][hartid - MIN_HARTID] = (frame_info_t){ .pid = pid, .end = end };
 	}
 	__atomic_thread_fence(__ATOMIC_SEQ_CST);
 	_timestamp = time_get();

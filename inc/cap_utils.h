@@ -13,9 +13,9 @@ bool cap_can_derive(cap_t, cap_t);
 		.raw = 0 \
 	}
 
-#define CAP_SENTINEL         \
-	(cap_t)          \
-	{                \
+#define CAP_SENTINEL                \
+	(cap_t)                     \
+	{                           \
 		.raw = (uint64_t)-1 \
 	}
 

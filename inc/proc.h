@@ -94,7 +94,6 @@ bool proc_monitor_acquire(proc_t *proc);
  */
 void proc_release(proc_t *proc);
 
-
 /**
  * Set the process to a suspended state without locking it. The process may
  * still be running, but it will not resume after its timeslice has ended.

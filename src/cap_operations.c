@@ -1,9 +1,9 @@
 #include "cap_operations.h"
 
-#include "current.h"
 #include "cap_table.h"
 #include "cap_types.h"
 #include "cap_utils.h"
+#include "current.h"
 #include "kassert.h"
 #include "preemption.h"
 #include "proc.h"
@@ -24,8 +24,8 @@ static void cap_delete_hook(uint64_t pid, cap_t cap);
 static cap_t cap_revoke_hook(uint64_t pid, cap_t cap, uint64_t revokedPid, cap_t revokedCap);
 static cap_t cap_restore_hook(uint64_t pid, cap_t cap);
 static cap_t cap_derive_hook(uint64_t pid, cap_t orig_cap, cap_t new_cap);
-static bool do_send(proc_t *sender, proc_t *receiver, uint64_t channel, 
-		uint64_t buf[4], cptr_t send_cptr, uint64_t tag);
+static bool do_send(proc_t *sender, proc_t *receiver, uint64_t channel,
+		    uint64_t buf[4], cptr_t send_cptr, uint64_t tag);
 
 int cap_get_cap(cptr_t cptr, uint64_t ret[1])
 {
@@ -502,7 +502,7 @@ int cap_monitor_pmp_clear(cptr_t mon_cptr, uint64_t pid, cptr_t pmp_cptr)
 int cap_socket_send(cptr_t sock_cptr, uint64_t buf[4], cptr_t buf_cptr)
 {
 	kassert(cptr_is_valid(sock_cptr));
-	
+
 	cap_t cap = ctable_get_cap(sock_cptr);
 	if (cap.type == CAPTY_NULL)
 		return EXCPT_EMPTY;
@@ -535,7 +535,7 @@ int cap_socket_send(cptr_t sock_cptr, uint64_t buf[4], cptr_t buf_cptr)
 int cap_socket_recv(cptr_t sock_cptr)
 {
 	kassert(cptr_is_valid(sock_cptr));
-	
+
 	cap_t cap = ctable_get_cap(sock_cptr);
 	if (cap.type == CAPTY_NULL)
 		return EXCPT_EMPTY;
@@ -562,7 +562,7 @@ int cap_socket_recv(cptr_t sock_cptr)
 int cap_socket_sendrecv(cptr_t sock_cptr, uint64_t buf[4], cptr_t buf_cptr)
 {
 	kassert(cptr_is_valid(sock_cptr));
-	
+
 	cap_t cap = ctable_get_cap(sock_cptr);
 	if (cap.type == CAPTY_NULL)
 		return EXCPT_EMPTY;
@@ -759,8 +759,8 @@ cap_t cap_derive_hook(uint64_t pid, cap_t orig_cap, cap_t new_cap)
 	return orig_cap;
 }
 
-bool do_send(proc_t *sender, proc_t *receiver, uint64_t channel, uint64_t buf[4], 
-		cptr_t send_cptr, uint64_t tag)
+bool do_send(proc_t *sender, proc_t *receiver, uint64_t channel, uint64_t buf[4],
+	     cptr_t send_cptr, uint64_t tag)
 {
 	if (receiver == NULL)
 		return false;
@@ -774,8 +774,7 @@ bool do_send(proc_t *sender, proc_t *receiver, uint64_t channel, uint64_t buf[4]
 	receiver->regs[REG_A4] = buf[3];
 
 	cptr_t recv_cptr = cptr_mk(receiver->pid, receiver->regs[REG_A5]);
-	if (cptr_is_valid(send_cptr) && cptr_is_valid(recv_cptr) &&
-		!ctable_is_null(send_cptr) && ctable_is_null(recv_cptr)) {
+	if (cptr_is_valid(send_cptr) && cptr_is_valid(recv_cptr) && !ctable_is_null(send_cptr) && ctable_is_null(recv_cptr)) {
 		cap_t cap = ctable_get_cap(send_cptr);
 		cap = cap_move_hook(sender->pid, receiver->pid, cap);
 		ctable_move(send_cptr, recv_cptr, cap);
