@@ -60,6 +60,7 @@ int syscall_yield(uint64_t until)
 {
 	// Yield.
 	current->sleep = until ? until : current->end_time;
+	current->regs[REG_PC] += 4;
 	return EXCPT_PREEMPT;
 }
 
@@ -106,7 +107,7 @@ int syscall_revoke_cap(uint64_t cidx)
 	return cap_revoke(cptr);
 }
 
-int syscall_derive_cap(uint64_t orig_cidx, uint64_t dest_cidx, cap_t new_cap)
+int syscall_derive_cap(uint64_t orig_cidx, uint64_t dest_cidx, uint64_t new_cap)
 {
 	// Create and check that capability pointers are valid.
 	cptr_t orig = cptr_mk(current->pid, orig_cidx);
@@ -114,7 +115,7 @@ int syscall_derive_cap(uint64_t orig_cidx, uint64_t dest_cidx, cap_t new_cap)
 	if (!cptr_is_valid(orig) || !cptr_is_valid(dest))
 		return EXCPT_INDEX;
 
-	return cap_derive(orig, dest, new_cap);
+	return cap_derive(orig, dest, (cap_t){.raw = new_cap});
 }
 
 int syscall_pmp_set(uint64_t pmp_cidx, uint64_t index)
@@ -179,7 +180,7 @@ int syscall_monitor_set_reg(uint64_t mon_cidx, uint64_t pid, uint64_t reg, uint6
 
 int syscall_monitor_get_cap(uint64_t mon_cidx, uint64_t pid, uint64_t src_cidx, uint64_t dest_cidx)
 {
-	cptr_t mon_cptr = cptr_mk(pid, mon_cidx);
+	cptr_t mon_cptr = cptr_mk(current->pid, mon_cidx);
 	if (!cptr_is_valid(mon_cptr))
 		return EXCPT_INDEX;
 
@@ -192,7 +193,7 @@ int syscall_monitor_get_cap(uint64_t mon_cidx, uint64_t pid, uint64_t src_cidx, 
 
 int syscall_monitor_take_cap(uint64_t mon_cidx, uint64_t pid, uint64_t src_cidx, uint64_t dest_cidx)
 {
-	cptr_t mon_cptr = cptr_mk(pid, mon_cidx);
+	cptr_t mon_cptr = cptr_mk(current->pid, mon_cidx);
 	if (!cptr_is_valid(mon_cptr))
 		return EXCPT_INDEX;
 
@@ -206,7 +207,7 @@ int syscall_monitor_take_cap(uint64_t mon_cidx, uint64_t pid, uint64_t src_cidx,
 
 int syscall_monitor_give_cap(uint64_t mon_cidx, uint64_t pid, uint64_t src_cidx, uint64_t dest_cidx)
 {
-	cptr_t mon_cptr = cptr_mk(pid, mon_cidx);
+	cptr_t mon_cptr = cptr_mk(current->pid, mon_cidx);
 	if (!cptr_is_valid(mon_cptr))
 		return EXCPT_INDEX;
 
@@ -220,7 +221,7 @@ int syscall_monitor_give_cap(uint64_t mon_cidx, uint64_t pid, uint64_t src_cidx,
 
 int syscall_monitor_pmp_set(uint64_t mon_cidx, uint64_t pid, uint64_t pmp_cidx, uint64_t index)
 {
-	cptr_t mon_cptr = cptr_mk(pid, mon_cidx);
+	cptr_t mon_cptr = cptr_mk(current->pid, mon_cidx);
 	if (!cptr_is_valid(mon_cptr))
 		return EXCPT_INDEX;
 
@@ -228,7 +229,7 @@ int syscall_monitor_pmp_set(uint64_t mon_cidx, uint64_t pid, uint64_t pmp_cidx, 
 	if (!cptr_is_valid(pmp_cidx))
 		return EXCPT_MONITOR_INDEX;
 
-	if (index < NUM_OF_PMP)
+	if (index >= NUM_OF_PMP)
 		return EXCPT_PMP_INDEX;
 
 	return cap_monitor_pmp_set(mon_cptr, pid, pmp_cptr, index);
@@ -236,7 +237,7 @@ int syscall_monitor_pmp_set(uint64_t mon_cidx, uint64_t pid, uint64_t pmp_cidx, 
 
 int syscall_monitor_pmp_clear(uint64_t mon_cidx, uint64_t pid, uint64_t pmp_cidx)
 {
-	cptr_t mon_cptr = cptr_mk(pid, mon_cidx);
+	cptr_t mon_cptr = cptr_mk(current->pid, mon_cidx);
 	if (!cptr_is_valid(mon_cptr))
 		return EXCPT_INDEX;
 
@@ -247,17 +248,32 @@ int syscall_monitor_pmp_clear(uint64_t mon_cidx, uint64_t pid, uint64_t pmp_cidx
 	return cap_monitor_pmp_clear(mon_cptr, pid, pmp_cptr);
 }
 
-int syscall_socket_send(void)
+int syscall_socket_send(uint64_t sock_cidx, uint64_t buf0, uint64_t buf1, 
+		uint64_t buf2, uint64_t buf3, uint64_t buf_cidx)
 {
-	return 0;
+	cptr_t sock_cptr = cptr_mk(current->pid, sock_cidx);
+	cptr_t buf_cptr = cptr_mk(current->pid, sock_cidx);
+	uint64_t buf[] = {buf0, buf1, buf2, buf3};
+	if (!cptr_is_valid(sock_cptr))
+		return EXCPT_INDEX;
+	return cap_socket_send(sock_cptr, buf, buf_cptr);
 }
 
-int syscall_socket_recv(void)
+int syscall_socket_recv(uint64_t sock_cidx)
 {
-	return 0;
+	cptr_t sock_cptr = cptr_mk(current->pid, sock_cidx);
+	if (!cptr_is_valid(sock_cptr))
+		return EXCPT_INDEX;
+	return cap_socket_recv(sock_cptr);
 }
 
-int syscall_socket_sendrecv(void)
+int syscall_socket_sendrecv(uint64_t sock_cidx, uint64_t buf0, uint64_t buf1, 
+		uint64_t buf2, uint64_t buf3, uint64_t buf_cidx)
 {
-	return 0;
+	cptr_t sock_cptr = cptr_mk(current->pid, sock_cidx);
+	cptr_t buf_cptr = cptr_mk(current->pid, buf_cidx);
+	uint64_t buf[] = {buf0, buf1, buf2, buf3};
+	if (!cptr_is_valid(sock_cptr))
+		return EXCPT_INDEX;
+	return cap_socket_sendrecv(sock_cptr, buf, buf_cptr);
 }

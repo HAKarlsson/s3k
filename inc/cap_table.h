@@ -6,8 +6,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define CTABLE_MAX_DEPTH 256
-
 typedef int32_t cptr_t;
 
 typedef struct {

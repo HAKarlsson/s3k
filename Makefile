@@ -49,7 +49,7 @@ vpath %.c src
 vpath %.S src
 
 SRCS=head.S trap.S altio.c cap_operations.c cap_table.c cap_utils.c csr.c \
-     current.c exception.c info.c ipc.c kassert.c preemption.c proc.c \
+     current.c exception.c info.c kassert.c preemption.c proc.c \
      schedule.c syscall.c wfi.c
 
 ELF=${BUILD}/${PROGRAM}.elf
@@ -77,6 +77,8 @@ dasm: ${DA}
 size: ${ELF}
 	${SIZE} $<
 
+kernel: ${ELF}
+
 format:
 	clang-format -i ${shell find -wholename "*.[chC]" -not -path '*/.*'}
 
@@ -93,7 +95,7 @@ ${BUILD}/%.bin: ${OBJS}
 	${OBJCOPY} -O binary $< $@
 
 ${BUILD}/%.da: ${BUILD}/%.elf
-	${OBJDUMP} -S $< > $@
+	${OBJDUMP} -d $< > $@
 
 .PHONY: all options clean dasm docs test kernel size
 

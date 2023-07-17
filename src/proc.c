@@ -73,12 +73,12 @@ void proc_resume(proc_t *proc)
 	__atomic_fetch_and(&proc->state, ~PSF_SUSPENDED, __ATOMIC_RELEASE);
 }
 
-bool proc_ipc_block(proc_t *proc, uint64_t channel_id)
+bool proc_ipc_wait(proc_t *proc, uint64_t channel_id)
 {
 	// We expect that the process is running as usual.
 	uint64_t expected = PSF_BUSY;
 	// We set process to be blocked on ipc
-	uint64_t desired = (channel_id << 48) | PSF_BLOCKED;
+	uint64_t desired = (channel_id << 16) | PSF_BLOCKED;
 	// This should fail only if the process should be suspended.
 	return __atomic_compare_exchange_n(
 	    &proc->state, &expected, desired, false /* not weak */,
@@ -89,11 +89,16 @@ bool proc_ipc_acquire(proc_t *proc, uint64_t channel_id)
 {
 	// We expect that the process is waiting on channel_id.
 	// Channel ID is set to the most significant bytes.
-	uint64_t expected = (channel_id << 32) | PSF_BLOCKED;
+	uint64_t expected = (channel_id << 16) | PSF_BLOCKED;
 	uint64_t desired = expected | PSF_BUSY;
 	return __atomic_compare_exchange_n(
 	    &proc->state, &expected, desired, false /* not weak */,
 	    __ATOMIC_SEQ_CST /* succ */, __ATOMIC_RELAXED /* fail */);
+}
+
+void proc_ipc_release(proc_t *proc)
+{
+	__atomic_fetch_and(&proc->state, PSF_SUSPENDED, __ATOMIC_RELEASE);
 }
 
 void proc_pmp_set(proc_t *proc, uint64_t index, uint64_t addr, uint64_t rwx)

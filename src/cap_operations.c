@@ -1,14 +1,20 @@
 #include "cap_operations.h"
 
+#include "current.h"
 #include "cap_table.h"
 #include "cap_types.h"
 #include "cap_utils.h"
-#include "ipc.h"
 #include "kassert.h"
 #include "preemption.h"
 #include "proc.h"
 #include "schedule.h"
 
+typedef struct {
+	proc_t *root;
+	proc_t *client;
+} channel_t;
+
+static channel_t channels[NUM_OF_CHANNELS];
 static ticket_lock_t _lock;
 
 static void cap_lock(void);
@@ -18,6 +24,8 @@ static void cap_delete_hook(uint64_t pid, cap_t cap);
 static cap_t cap_revoke_hook(uint64_t pid, cap_t cap, uint64_t revokedPid, cap_t revokedCap);
 static cap_t cap_restore_hook(uint64_t pid, cap_t cap);
 static cap_t cap_derive_hook(uint64_t pid, cap_t orig_cap, cap_t new_cap);
+static bool do_send(proc_t *sender, proc_t *receiver, uint64_t channel, 
+		uint64_t buf[4], cptr_t send_cptr, uint64_t tag);
 
 int cap_get_cap(cptr_t cptr, uint64_t ret[1])
 {
@@ -417,8 +425,8 @@ int cap_monitor_move_cap(cptr_t mon_cptr, uint64_t pid, cptr_t src_cptr, cptr_t 
 		error = EXCPT_MONITOR_BUSY;
 	} else {
 		cap_t cap = ctable_get_cap(src_cptr);
+		cap = cap_move_hook(src_pid, dest_pid, cap);
 		ctable_move(src_cptr, dest_cptr, cap);
-		cap_move_hook(src_pid, dest_pid, cap);
 		proc_release(proc);
 	}
 	cap_unlock();
@@ -491,6 +499,120 @@ int cap_monitor_pmp_clear(cptr_t mon_cptr, uint64_t pid, cptr_t pmp_cptr)
 	return error;
 }
 
+int cap_socket_send(cptr_t sock_cptr, uint64_t buf[4], cptr_t buf_cptr)
+{
+	kassert(cptr_is_valid(sock_cptr));
+	
+	cap_t cap = ctable_get_cap(sock_cptr);
+	if (cap.type == CAPTY_NULL)
+		return EXCPT_EMPTY;
+	if (cap.type != CAPTY_SOCKET)
+		return EXCPT_INVALID_CAP;
+
+	cap_lock();
+	int error;
+	uint64_t channel = cap.socket.channel;
+	uint64_t tag = cap.socket.tag;
+	proc_t *sender = proc_get(cptr_get_pid(sock_cptr));
+	proc_t *receiver;
+	if (tag == 0) {
+		receiver = channels[channel].root;
+	} else {
+		receiver = channels[channel].client;
+	}
+
+	if (ctable_is_null(sock_cptr)) {
+		error = EXCPT_EMPTY;
+	} else if (do_send(sender, receiver, channel, buf, buf_cptr, tag)) {
+		error = EXCPT_NONE;
+	} else {
+		error = EXCPT_IPC_NO_RECEIVER;
+	}
+	cap_unlock();
+	return error;
+}
+
+int cap_socket_recv(cptr_t sock_cptr)
+{
+	kassert(cptr_is_valid(sock_cptr));
+	
+	cap_t cap = ctable_get_cap(sock_cptr);
+	if (cap.type == CAPTY_NULL)
+		return EXCPT_EMPTY;
+	if (cap.type != CAPTY_SOCKET || cap.socket.tag > 0)
+		return EXCPT_INVALID_CAP;
+
+	cap_lock();
+	int error;
+	uint64_t channel = cap.socket.channel;
+	proc_t *receiver = proc_get(cptr_get_pid(sock_cptr));
+
+	if (ctable_is_null(sock_cptr)) {
+		error = EXCPT_EMPTY;
+	} else {
+		proc_ipc_wait(receiver, channel);
+		error = EXCPT_PREEMPT;
+		receiver->regs[REG_T0] = EXCPT_PREEMPT;
+		receiver->regs[REG_PC] += 4;
+	}
+	cap_unlock();
+	return error;
+}
+
+int cap_socket_sendrecv(cptr_t sock_cptr, uint64_t buf[4], cptr_t buf_cptr)
+{
+	kassert(cptr_is_valid(sock_cptr));
+	
+	cap_t cap = ctable_get_cap(sock_cptr);
+	if (cap.type == CAPTY_NULL)
+		return EXCPT_EMPTY;
+	if (cap.type != CAPTY_SOCKET)
+		return EXCPT_INVALID_CAP;
+
+	cap_lock();
+	int error;
+	uint64_t channel = cap.socket.channel;
+	uint64_t tag = cap.socket.tag;
+	proc_t *sender = proc_get(cptr_get_pid(sock_cptr));
+	proc_t *receiver;
+	if (tag != 0) {
+		receiver = channels[channel].root;
+	} else {
+		receiver = channels[channel].client;
+	}
+
+	if (ctable_is_null(sock_cptr)) {
+		error = EXCPT_EMPTY;
+	} else if (do_send(sender, receiver, channel, buf, buf_cptr, tag)) {
+		if (tag == 0) {
+			channels[channel].root = sender;
+			channels[channel].client = NULL;
+		} else {
+			channels[channel].client = sender;
+		}
+		proc_ipc_wait(sender, channel);
+		error = EXCPT_PREEMPT;
+		sender->regs[REG_T0] = EXCPT_PREEMPT;
+		sender->regs[REG_PC] += 4;
+	} else if (tag == 0) {
+		if (cptr_is_valid(buf_cptr) && !ctable_is_null(buf_cptr)) {
+			cap_t buf_cap = ctable_get_cap(buf_cptr);
+			ctable_delete(buf_cptr);
+			cap_delete_hook(cptr_get_pid(buf_cptr), buf_cap);
+		}
+		channels[channel].root = sender;
+		channels[channel].client = NULL;
+		proc_ipc_wait(sender, channel);
+		error = EXCPT_PREEMPT;
+		sender->regs[REG_T0] = EXCPT_PREEMPT;
+		sender->regs[REG_PC] += 4;
+	} else {
+		error = EXCPT_IPC_NO_RECEIVER;
+	}
+	cap_unlock();
+	return error;
+}
+
 void cap_lock(void)
 {
 	tl_acq(&_lock);
@@ -509,12 +631,9 @@ cap_t cap_move_hook(uint64_t src_pid, uint64_t dest_pid, cap_t cap)
 	switch (cap.type) {
 	case CAPTY_TIME: {
 		uint64_t end = cap.time.base + cap.time.len;
-		;
 		uint64_t hartid = cap.time.hartid;
 		uint64_t from = cap.time.base + cap.time.alloc;
-		;
 		uint64_t to = cap.time.base + cap.time.len;
-		;
 		schedule_update(dest_pid, end, hartid, from, to);
 	} break;
 
@@ -638,4 +757,32 @@ cap_t cap_derive_hook(uint64_t pid, cap_t orig_cap, cap_t new_cap)
 	} break;
 	}
 	return orig_cap;
+}
+
+bool do_send(proc_t *sender, proc_t *receiver, uint64_t channel, uint64_t buf[4], 
+		cptr_t send_cptr, uint64_t tag)
+{
+	if (receiver == NULL)
+		return false;
+	if (!proc_ipc_acquire(receiver, channel))
+		return false;
+	receiver->regs[REG_T0] = EXCPT_NONE;
+	receiver->regs[REG_A0] = tag;
+	receiver->regs[REG_A1] = buf[0];
+	receiver->regs[REG_A2] = buf[1];
+	receiver->regs[REG_A3] = buf[2];
+	receiver->regs[REG_A4] = buf[3];
+
+	cptr_t recv_cptr = cptr_mk(receiver->pid, receiver->regs[REG_A5]);
+	if (cptr_is_valid(send_cptr) && cptr_is_valid(recv_cptr) &&
+		!ctable_is_null(send_cptr) && ctable_is_null(recv_cptr)) {
+		cap_t cap = ctable_get_cap(send_cptr);
+		cap = cap_move_hook(sender->pid, receiver->pid, cap);
+		ctable_move(send_cptr, recv_cptr, cap);
+		receiver->regs[REG_A5] = cap.raw;
+	} else {
+		receiver->regs[REG_A5] = 0;
+	}
+	proc_ipc_release(receiver);
+	return true;
 }

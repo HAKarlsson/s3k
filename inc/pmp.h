@@ -2,12 +2,8 @@
 
 #include <stdint.h>
 
-static inline uint64_t pmp_napot_begin(uint64_t addr)
+static inline void pmp_napot_decode(uint64_t addr, uint64_t *base, uint64_t *size)
 {
-	return ((addr + 1) & addr) << 2;
-}
-
-static inline uint64_t pmp_napot_end(uint64_t addr)
-{
-	return (((addr + 1) | addr) + 1) << 2;
+	*base = ((addr + 1) & addr) << 2;
+	*size =  (((addr + 1) ^ addr) + 1) << 2;
 }

@@ -94,6 +94,7 @@ bool proc_monitor_acquire(proc_t *proc);
  */
 void proc_release(proc_t *proc);
 
+
 /**
  * Set the process to a suspended state without locking it. The process may
  * still be running, but it will not resume after its timeslice has ended.
@@ -123,6 +124,7 @@ bool proc_ipc_wait(proc_t *proc, uint64_t channel_id);
  * released with proc_ipc_release().
  */
 bool proc_ipc_acquire(proc_t *proc, uint64_t channel_id);
+void proc_ipc_release(proc_t *proc);
 
 void proc_pmp_set(proc_t *proc, uint64_t index, uint64_t addr, uint64_t rwx);
 void proc_pmp_clear(proc_t *proc, uint64_t index);

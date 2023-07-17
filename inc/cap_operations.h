@@ -125,5 +125,17 @@ int cap_monitor_get_cap(cptr_t mon_cptr, uint64_t pid, cptr_t cptr, uint64_t ret
  */
 int cap_monitor_move_cap(cptr_t mon_cptr, uint64_t pid, cptr_t src_cidx, cptr_t dest_cidx);
 
+/** TODO COMMENT */
 int cap_monitor_pmp_set(cptr_t mon_cptr, uint64_t pid, cptr_t pmp_cptr, uint64_t index);
+
+/** TODO COMMENT */
 int cap_monitor_pmp_clear(cptr_t mon_cptr, uint64_t pid, cptr_t pmp_cptr);
+
+/** TODO COMMENT */
+int cap_socket_send(cptr_t sock_cptr, uint64_t buf[4], cptr_t buf_cptr);
+
+/** TODO COMMENT */
+int cap_socket_recv(cptr_t sock_cptr);
+
+/** TODO COMMENT */
+int cap_socket_sendrecv(cptr_t sock_cptr, uint64_t buf[4], cptr_t buf_cptr);

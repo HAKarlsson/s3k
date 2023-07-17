@@ -18,6 +18,8 @@ trap_entry:
 	/* Save user tp to scratch, load PCB pointer */
 	csrrw tp, mscratch, tp
 
+	beqz tp, __hang
+
 	/* Save call-used registers, ra, sp, gp, tp, pc */
 	sd ra, REG_RA(tp)
 	sd sp, REG_SP(tp)
@@ -216,3 +218,6 @@ _syscall_table:
 	j syscall_socket_recv
 	j syscall_socket_sendrecv
 .option pop
+
+__hang:
+	j __hang

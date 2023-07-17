@@ -2,6 +2,7 @@
 
 #include "pmp.h"
 
+// Check if bits in a subsets b
 static bool subset(uint64_t a, uint64_t b)
 {
 	return (a & b) == a;
@@ -32,10 +33,10 @@ bool cap_can_revoke(cap_t a, cap_t b)
 			return a_begin <= b_begin && b_end <= a_end;
 		}
 		if (b.type == CAPTY_PMP) {
-			uint64_t a_begin = a.memory.base << 12;
-			uint64_t a_end = (a.memory.base + a.memory.len) << 12;
-			uint64_t b_begin = pmp_napot_begin(b.pmp.addr);
-			uint64_t b_end = pmp_napot_end(b.pmp.addr);
+			uint64_t a_begin = (uint64_t)a.memory.base << 12;
+			uint64_t a_end = (uint64_t)(a.memory.base + a.memory.len) << 12;
+			uint64_t b_begin, b_end;
+			pmp_napot_decode(b.pmp.addr, &b_begin, &b_end);
 			return a_begin <= b_begin && b_end <= a_end;
 		}
 	} break;
@@ -111,13 +112,15 @@ bool cap_can_derive(cap_t a, cap_t b)
 			       && subset(b_rwx, a_rwx);
 		}
 		if (b.type == CAPTY_PMP) {
-			uint64_t a_free = (a.memory.base + a.memory.alloc) << 12;
-			uint64_t a_end = (a.memory.base + a.memory.len) << 12;
+			uint64_t a_free = (uint64_t)(a.memory.base + a.memory.alloc) << 12;
+			uint64_t a_end = (uint64_t)(a.memory.base + a.memory.len) << 12;
 			uint64_t a_rwx = a.memory.rwx;
-			uint64_t b_begin = pmp_napot_begin(b.pmp.addr);
-			uint64_t b_end = pmp_napot_end(b.pmp.addr);
+
+			uint64_t b_base, b_size;
+			pmp_napot_decode(b.pmp.addr, &b_base, &b_size);
 			uint64_t b_rwx = b.pmp.rwx;
-			return a_free <= b_begin && b_end <= a_end
+			
+			return a_free <= b_base && (b_base + b_size) <= a_end
 			       && subset(b_rwx, a_rwx);
 		}
 	} break;
