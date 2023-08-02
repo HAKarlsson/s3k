@@ -8,6 +8,7 @@
 // Harts 0,1,2,3
 #define N_HART 4
 
+// PMP registers
 #define N_PMP 8
 
 // RTC ticks per second
@@ -15,9 +16,6 @@
 
 /// Stack size of 256 B
 #define LOG_STACK_SIZE 8
-
-// Core-local interrupt registers
-#define CLINT 0x2000000ull
 
 // Initial capabilities.
 #define INIT_CAPS                                       \

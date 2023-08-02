@@ -8,7 +8,13 @@ PROGRAM?=s3k
 CONFIG_H?=../config.def.h
 
 # Platform
-PLATFORM?=plat/virt
+PLATFORM?=../plat/virt
+
+# Common
+COMMON = ../common
+
+# Drivers
+DRIVERS = ../drivers
 
 # Build directory
 BUILD?=build
@@ -25,10 +31,13 @@ SIZE=${RISCV_PREFIX}size
 OBJDUMP=${RISCV_PREFIX}objdump
 OBJCOPY=${RISCV_PREFIX}objcopy
 
+vpath %.c src
+vpath %.S src
+
 # Source files
 SRCS=head.S trap.S cap_operations.c cap_table.c cap_utils.c csr.c \
      current.c exception.c info.c kassert.c preemption.c proc.c \
-     schedule.c syscall.c wfi.c ../common/altio.c
+     schedule.c syscall.c wfi.c ${COMMON}/altio.c
 SRCS+=${PLATFORM_SRCS}
 
 # Compilation flags
@@ -46,14 +55,14 @@ CFLAGS+=-Wl,--gc-sections
 CFLAGS+=-flto -fwhole-program
 CFLAGS+=--specs=nosys.specs
 CFLAGS+=-ffunction-sections -fdata-sections
-CFLAGS+=-T${PLATFORM}/linker.ld
+CFLAGS+=-T${PLATFORM}/platform.ld -Tlinker.ld
 
 
 INC+=-include ${PLATFORM}/config.h
 INC+=-include ${CONFIG_H}
 INC+=-Iinc 
-INC+=-I../drivers/inc
-INC+=-I../common/inc
+INC+=-I${DRIVERS}/inc
+INC+=-I${COMMON}/inc
 
 ELF=${BUILD}/${PROGRAM}.elf
 DEP=${BUILD}/${PROGRAM}.d
@@ -93,7 +102,7 @@ ${BUILD}:
 	mkdir -p $@
 
 ${BUILD}/%.elf: ${SRCS} | ${BUILD}
-	${CC} ${CFLAGS} ${INC} -MMD -o $@ ${filter-out %.h, $^}
+	${CC} ${CFLAGS} ${INC} -MMD -o $@ ${filter %.S, $^} ${filter %.c, $^}
 
 ${BUILD}/%.bin: ${OBJS}
 	${OBJCOPY} -O binary $< $@
