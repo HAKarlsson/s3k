@@ -14,7 +14,7 @@ typedef struct {
 	proc_t *client;
 } channel_t;
 
-static channel_t channels[NUM_OF_CHANNELS];
+static channel_t channels[N_CHAN];
 static ticket_lock_t _lock;
 
 static void cap_lock(void);
@@ -333,7 +333,7 @@ int cap_monitor_resume(cptr_t mon_cptr, uint64_t pid)
 int cap_monitor_get_reg(cptr_t mon_cptr, uint64_t pid, uint64_t reg, uint64_t ret[1])
 {
 	kassert(cptr_is_valid(mon_cptr));
-	kassert(reg < NUM_OF_REGS);
+	kassert(reg < N_REGS);
 
 	int error = monitor_validate(mon_cptr, pid);
 	if (error)
@@ -356,7 +356,7 @@ int cap_monitor_get_reg(cptr_t mon_cptr, uint64_t pid, uint64_t reg, uint64_t re
 int cap_monitor_set_reg(cptr_t mon_cptr, uint64_t pid, uint64_t reg, uint64_t val)
 {
 	kassert(cptr_is_valid(mon_cptr));
-	kassert(reg < NUM_OF_REGS);
+	kassert(reg < N_REGS);
 
 	int error = monitor_validate(mon_cptr, pid);
 	if (error)

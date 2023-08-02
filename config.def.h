@@ -3,22 +3,22 @@
 #define __CONFIG_H__
 
 // Number of user processes
-#define NUM_OF_PROCESSES 8
+#define N_PROC 8
 
 // Number of capabilities per process.
-#define NUM_OF_CAPABILITIES 32
+#define N_CAP 32
 
 // Number of IPC channels.
-#define NUM_OF_CHANNELS 16
+#define N_CHAN 16
 
-// Number of slices per period
-#define NUM_OF_FRAMES 64ull
+// Number of slots per period
+#define N_SLOT 64ull
 
-// Length of time slice in ticks.
-#define FRAME_LENGTH (TICKS_PER_SECOND / NUM_OF_FRAMES / 100ull)
+// Length of slots in ticks.
+#define SLOT_LENGTH (TICKS_PER_SECOND / N_SLOT / 100ull)
 
-// Number of slack ticks per slice
-#define SLACK_LENGTH 10000
+// Scheduler time
+#define SCHEDULER_TIME 10000
 
 // If debugging, uncomment
 #define NDEBUG

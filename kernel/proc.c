@@ -6,12 +6,12 @@
 #include "kassert.h"
 #include "ticket_lock.h"
 
-static proc_t _processes[NUM_OF_PROCESSES];
+static proc_t _processes[N_PROC];
 extern unsigned char _payload[];
 
 void proc_init(void)
 {
-	for (int i = 0; i < NUM_OF_PROCESSES; i++) {
+	for (int i = 0; i < N_PROC; i++) {
 		_processes[i].pid = i;
 		_processes[i].state = PSF_SUSPENDED;
 		_processes[i].instrument_wcet = 0;
@@ -25,7 +25,7 @@ void proc_init(void)
 
 proc_t *proc_get(uint64_t pid)
 {
-	kassert(pid < NUM_OF_PROCESSES);
+	kassert(pid < N_PROC);
 	kassert(_processes[pid].pid == pid);
 	return &_processes[pid];
 }

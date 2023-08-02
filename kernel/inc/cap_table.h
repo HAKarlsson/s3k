@@ -13,7 +13,7 @@ typedef struct {
 	cap_t cap;
 } cte_t;
 
-extern cte_t ctable[NUM_OF_PROCESSES * NUM_OF_CAPABILITIES];
+extern cte_t ctable[N_PROC * N_CAP];
 
 static inline bool cptr_is_valid(cptr_t cptr)
 {
@@ -22,15 +22,15 @@ static inline bool cptr_is_valid(cptr_t cptr)
 
 static inline uint64_t cptr_get_pid(cptr_t cptr)
 {
-	return cptr / NUM_OF_CAPABILITIES;
+	return cptr / N_CAP;
 }
 
 static inline cptr_t cptr_mk(uint64_t pid, uint64_t idx)
 {
-	kassert(pid < NUM_OF_PROCESSES);
-	if (idx >= NUM_OF_CAPABILITIES)
+	kassert(pid < N_PROC);
+	if (idx >= N_CAP)
 		return -1;
-	cptr_t cptr = pid * NUM_OF_CAPABILITIES + idx;
+	cptr_t cptr = pid * N_CAP + idx;
 	kassert(cptr_get_pid(cptr) == pid);
 	return cptr;
 }

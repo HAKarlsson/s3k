@@ -38,18 +38,18 @@ int syscall_get_info(uint64_t info)
 	}
 }
 
-int syscall_get_reg(uint64_t regid)
+int syscall_get_reg(uint64_t reg)
 {
-	if (regid <= REG_T6 || regid >= NUM_OF_REGS)
+	if (reg >= N_REGS)
 		return EXCPT_REG_INDEX;
 
-	CURRENT_ARGS[0] = current->regs[regid];
+	CURRENT_ARGS[0] = current->regs[reg];
 	return EXCPT_NONE;
 }
 
 int syscall_set_reg(uint64_t reg, uint64_t value)
 {
-	if (reg <= REG_T6 || reg >= NUM_OF_REGS)
+	if (reg >= N_REGS)
 		return EXCPT_REG_INDEX;
 
 	current->regs[reg] = value;
@@ -160,7 +160,7 @@ int syscall_monitor_get_reg(uint64_t mon_cidx, uint64_t pid, uint64_t reg)
 	if (!cptr_is_valid(mon_cptr))
 		return EXCPT_INDEX;
 
-	if (reg >= NUM_OF_REGS)
+	if (reg >= N_REGS)
 		return EXCPT_MONITOR_REG_INDEX;
 
 	return cap_monitor_get_reg(mon_cptr, pid, reg, CURRENT_ARGS);
@@ -172,7 +172,7 @@ int syscall_monitor_set_reg(uint64_t mon_cidx, uint64_t pid, uint64_t reg, uint6
 	if (!cptr_is_valid(mon_cptr))
 		return EXCPT_INDEX;
 
-	if (reg >= NUM_OF_REGS)
+	if (reg >= N_REGS)
 		return EXCPT_MONITOR_REG_INDEX;
 
 	return cap_monitor_set_reg(mon_cptr, pid, reg, val);
@@ -229,7 +229,7 @@ int syscall_monitor_pmp_set(uint64_t mon_cidx, uint64_t pid, uint64_t pmp_cidx, 
 	if (!cptr_is_valid(pmp_cidx))
 		return EXCPT_MONITOR_INDEX;
 
-	if (index >= NUM_OF_PMP)
+	if (index >= N_PMP)
 		return EXCPT_PMP_INDEX;
 
 	return cap_monitor_pmp_set(mon_cptr, pid, pmp_cptr, index);

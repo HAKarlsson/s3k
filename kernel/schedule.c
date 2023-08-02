@@ -14,7 +14,7 @@ typedef struct frame_info {
 	uint8_t end;
 } frame_info_t;
 
-static frame_info_t _frames[NUM_OF_FRAMES][NUM_OF_HARTS];
+static frame_info_t _frames[N_SLOT][N_HART];
 static uint64_t _timestamp;
 
 /**
@@ -28,7 +28,7 @@ static uint64_t _timestamp;
  * lock on the process. If the process is running on another hart, that
  * hart will have a lock on that process and continue running.
  */
-bool _has_priority(frame_info_t frame_info[NUM_OF_HARTS], uint64_t hartid)
+bool _has_priority(frame_info_t frame_info[N_HART], uint64_t hartid)
 {
 	if (frame_info[hartid].end == 0)
 		return false;
@@ -42,7 +42,7 @@ bool _has_priority(frame_info_t frame_info[NUM_OF_HARTS], uint64_t hartid)
 	}
 	// Check harts with higher ID.
 	// If their scheduling is longer, then they have priority.
-	for (uint64_t i = hartid + 1; i < NUM_OF_HARTS; i++) {
+	for (uint64_t i = hartid + 1; i < N_HART; i++) {
 		if (frame_info[i].pid != frame_info[hartid].pid)
 			continue;
 		if (frame_info[i].end > frame_info[hartid].end)
@@ -63,12 +63,12 @@ uint64_t _get_timestamp(void)
 
 uint64_t _get_quantum(uint64_t time)
 {
-	return ((time + SLACK_LENGTH) / FRAME_LENGTH) % NUM_OF_FRAMES;
+	return ((time + SCHEDULER_TIME) / SLOT_LENGTH) % N_SLOT;
 }
 
-uint64_t _get_frame_info(frame_info_t frame_info[NUM_OF_HARTS], uint64_t frame)
+uint64_t _get_frame_info(frame_info_t frame_info[N_HART], uint64_t frame)
 {
-	for (uint64_t i = 0; i < NUM_OF_HARTS; i++)
+	for (uint64_t i = 0; i < N_HART; i++)
 		frame_info[i] = _frames[frame][i];
 	return _get_timestamp();
 }
@@ -79,7 +79,7 @@ proc_t *schedule_get(uint64_t hartid, uint64_t current_time, uint64_t *start_tim
 	uint64_t start_frame = _get_quantum(current_time);
 	;
 
-	frame_info_t frame_info[NUM_OF_HARTS];
+	frame_info_t frame_info[N_HART];
 
 	// Get frame info
 	uint64_t timestamp = _get_frame_info(frame_info, start_frame);
@@ -103,8 +103,8 @@ proc_t *schedule_get(uint64_t hartid, uint64_t current_time, uint64_t *start_tim
 	uint64_t length = end - start_frame;
 
 	// Calculate start and end times of frame.
-	*start_time = ((current_time + SLACK_LENGTH) / FRAME_LENGTH) * FRAME_LENGTH;
-	*end_time = *start_time + length * FRAME_LENGTH;
+	*start_time = ((current_time + SCHEDULER_TIME) / SLOT_LENGTH) * SLOT_LENGTH;
+	*end_time = *start_time + length * SLOT_LENGTH;
 
 	return proc;
 }
@@ -113,7 +113,7 @@ void schedule_init(void)
 {
 	uint64_t pid = 0;
 	uint64_t begin = 0;
-	uint64_t end = NUM_OF_FRAMES;
+	uint64_t end = N_SLOT;
 	for (uint64_t hartid = MIN_HARTID; hartid <= MAX_HARTID; hartid++)
 		schedule_update(pid, end, hartid, begin, end);
 }

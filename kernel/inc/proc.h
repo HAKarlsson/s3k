@@ -16,8 +16,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define NUM_OF_PMP 8
-
 /** Process state flags
  * PSF_BUSY: Process has been acquired.
  * PSF_BLOCKED: Waiting for IPC.
@@ -35,10 +33,10 @@
 typedef struct {
 	/** The registers of the process (RISC-V registers and virtual
 	 * registers). */
-	uint64_t regs[NUM_OF_REGS];
+	uint64_t regs[N_REGS];
 	/** PMP registers */
-	uint8_t pmpcfg[NUM_OF_PMP];
-	uint64_t pmpaddr[NUM_OF_PMP];
+	uint8_t pmpcfg[N_PMP];
+	uint64_t pmpaddr[N_PMP];
 	/** Instrumentation registers */
 	uint64_t instrument_wcet;
 	/** Process ID. */

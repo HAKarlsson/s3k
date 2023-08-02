@@ -46,8 +46,8 @@
 #define REG_ECAUSE _x(36)
 #define REG_EVAL _x(37)
 
-#define NUM_OF_REGS 38
-#define NUM_OF_GPR 32
+#define N_REGS 38
+#define N_GPR 32
 
 /* PMP offset relative proc_t */
 #define REG_PMPCFG0 _x(38)

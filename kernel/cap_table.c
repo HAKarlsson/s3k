@@ -4,12 +4,11 @@
 #include "kassert.h"
 #include "macro.h"
 
-cte_t ctable[NUM_OF_PROCESSES * NUM_OF_CAPABILITIES];
-
-static cap_t init_caps[] = INIT_CAPS;
+cte_t ctable[N_PROC * N_CAP];
 
 void ctable_init(void)
 {
+	cap_t init_caps[] = INIT_CAPS;
 	for (unsigned int i = 0; i < ARRAY_SIZE(init_caps); ++i) {
 		ctable[i].prev = i - 1;
 		ctable[i].next = i + 1;
