@@ -6,7 +6,7 @@
  * @author Henrik Karlsson (henrik10@kth.se)
  */
 
-#include "proc.h"
+#include "proc/proc.h"
 
 #include <stdint.h>
 

@@ -1,9 +1,10 @@
 /* See LICENSE file for copyright and license details. */
 #include "exception.h"
 
-#include "current.h"
-#include "preemption.h"
-#include "proc.h"
+#include "kernel.h"
+#include "proc/current.h"
+#include "proc/proc.h"
+#include "sched/preemption.h"
 
 #define ILLEGAL_INSTRUCTION 0x2
 
@@ -21,12 +22,12 @@ static void handle_default(uint64_t mcause, uint64_t mepc, uint64_t mtval);
  */
 void handle_ret(void)
 {
-	current->regs[REG_PC] = current->regs[REG_EPC];
-	current->regs[REG_SP] = current->regs[REG_ESP];
-	current->regs[REG_ECAUSE] = 0;
-	current->regs[REG_EVAL] = 0;
-	current->regs[REG_EPC] = 0;
-	current->regs[REG_ESP] = 0;
+	current->regs.pc = current->regs.epc;
+	current->regs.sp = current->regs.esp;
+	current->regs.ecause = 0;
+	current->regs.eval = 0;
+	current->regs.epc = 0;
+	current->regs.esp = 0;
 }
 
 /*
@@ -38,18 +39,19 @@ void handle_ret(void)
  */
 void handle_default(uint64_t mcause, uint64_t mepc, uint64_t mtval)
 {
-	current->regs[REG_ECAUSE] = mcause;
-	current->regs[REG_EVAL] = mtval;
-	current->regs[REG_EPC] = current->regs[REG_PC];
-	current->regs[REG_ESP] = current->regs[REG_SP];
-	current->regs[REG_PC] = current->regs[REG_TPC];
-	current->regs[REG_SP] = current->regs[REG_TSP];
+	current->regs.ecause = mcause;
+	current->regs.eval = mtval;
+	current->regs.epc = current->regs.pc;
+	current->regs.esp = current->regs.sp;
+	current->regs.pc = current->regs.tpc;
+	current->regs.sp = current->regs.tsp;
 }
 
 void exception_handler(uint64_t mcause, uint64_t mepc, uint64_t mtval)
 {
 	/* Check if it is a return from exception */
-	if (mcause == ILLEGAL_INSTRUCTION && (mtval == MRET || mtval == SRET || mtval == URET)) {
+	if (mcause == ILLEGAL_INSTRUCTION
+	    && (mtval == MRET || mtval == SRET || mtval == URET)) {
 		// Handle return from exception
 		handle_ret();
 	} else {

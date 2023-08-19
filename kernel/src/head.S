@@ -7,7 +7,7 @@
 .extern trap_entry
 .extern trap_exit
 
-.section .text.init
+.section .text.init,"ax",@progbits
 
 .globl _start
 .type _start, @function
@@ -41,11 +41,7 @@ zero_bss: /* write zeros to the bss section */
 	addi t0, t0, 1
 2:	bne t0, t1, 1b
 
-kernel_init: /* Initialize the kernel. */
-	call ctable_init
-	call schedule_init
-	call proc_init
-	call info
+	call kernel_init
 
 wake:   /* Wake harts MIN_HARTID .. MAX_HARTID. */
 	/* Wake using software interrupt */
@@ -73,6 +69,10 @@ wait:   /* Wait for initilization to finish. */
 	sw x0, (t0)
 
 head_exit:
+	csrw mcounteren,0x3
+	csrw scounteren,0x3
+	csrw mcountinhibit,0x8
+	csrw mhpmcounter3,0
 	/* Enable timer interrupts */
 	li t0, MIE_MTIE
 	csrw mie,t0

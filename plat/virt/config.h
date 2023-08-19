@@ -20,18 +20,15 @@
 #define CLINT 0x2000000ull
 
 // Initial capabilities.
-#define INIT_CAPS                                       \
-	{                                               \
-		CAP_PMP(0x20005fff, CAP_RWX),           \
-		    CAP_MEMORY(0x80020, 0x80, CAP_RWX), \
-		    CAP_MEMORY(0x10000, 0x1, CAP_RW),   \
-		    CAP_MEMORY(0x2000b, 0x1, CAP_R),    \
-		    CAP_TIME(0, 0, N_SLOT),             \
-		    CAP_TIME(1, 0, N_SLOT),             \
-		    CAP_TIME(2, 0, N_SLOT),             \
-		    CAP_TIME(3, 0, N_SLOT),             \
-		    CAP_MONITOR(0, N_PROC),             \
-		    CAP_CHANNEL(0, N_CHAN)              \
+#define INIT_CAPS                                                           \
+	{                                                                   \
+		pmp_cap(0x20005fff, MEM_RWX),                               \
+		    memory_cap(0x80020, 0x80, MEM_RWX),                     \
+		    memory_cap(0x10000, 0x1, MEM_RW),                       \
+		    memory_cap(0x200b, 0x1, MEM_R), time_cap(0, 0, N_SLOT), \
+		    time_cap(1, 0, N_SLOT), time_cap(2, 0, N_SLOT),         \
+		    time_cap(3, 0, N_SLOT), monitor_cap(0, N_PROC),         \
+		    channel_cap(0, N_CHAN)                                  \
 	}
 
 #endif /* __PLATFORM_H__ */

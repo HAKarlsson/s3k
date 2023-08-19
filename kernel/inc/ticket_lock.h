@@ -22,6 +22,12 @@ typedef struct {
 	unsigned int serving_ticket;
 } ticket_lock_t;
 
+static inline void tl_init(ticket_lock_t *lock)
+{
+	lock->next_ticket = 0;
+	lock->serving_ticket = 0;
+}
+
 /**
  * Acquire a ticket lock.
  *
@@ -30,10 +36,12 @@ typedef struct {
 static inline void tl_acq(ticket_lock_t *lock)
 {
 	// Increment next ticket number and return the previous value
-	unsigned long ticket = __atomic_fetch_add(&lock->next_ticket, 1, __ATOMIC_RELAXED);
+	unsigned long ticket
+	    = __atomic_fetch_add(&lock->next_ticket, 1, __ATOMIC_RELAXED);
 
 	// Wait until our ticket number is being served
-	while (__atomic_load_n(&lock->serving_ticket, __ATOMIC_ACQUIRE) != ticket) {
+	while (__atomic_load_n(&lock->serving_ticket, __ATOMIC_ACQUIRE)
+	       != ticket) {
 		// Wait until our ticket number is being served
 	}
 }

@@ -13,9 +13,6 @@ PLATFORM?=../plat/virt
 # Common
 COMMON = ../common
 
-# Drivers
-DRIVERS = ../drivers
-
 # Build directory
 BUILD?=build
 
@@ -31,19 +28,30 @@ SIZE=${RISCV_PREFIX}size
 OBJDUMP=${RISCV_PREFIX}objdump
 OBJCOPY=${RISCV_PREFIX}objcopy
 
-vpath %.c src
+# Search path
+vpath %.c src ${COMMON}/src
 vpath %.S src
 
 # Source files
-SRCS=head.S trap.S cap_operations.c cap_table.c cap_utils.c csr.c \
-     current.c exception.c info.c kassert.c preemption.c proc.c \
-     schedule.c syscall.c wfi.c ${COMMON}/altio.c
+SRCS=head.S trap.S
+SRCS+=altio/altio.c kassert.c
+SRCS+=cap/table.c cap/types.c
+SRCS+=proc/proc.c kernel.c
+SRCS+=exception.c
+SRCS+=syscall/syscall.c syscall/util.c
+SRCS+=sched/sched.c sched/wfi.c sched/preemption.c
+SRCS+=csr.c
+
 SRCS+=${PLATFORM_SRCS}
+
+OBJS=${patsubst %.c, ${BUILD}/%.o, ${filter %.c, ${SRCS}}} \
+	${patsubst %.S, ${BUILD}/%.o, ${filter %.S, ${SRCS}}}
+DEPS=${patsubst %, ${BUILD}/%.d, ${SRCS}}
 
 # Compilation flags
 CFLAGS =-march=${ARCH} -mabi=${ABI} -mcmodel=${CMODEL}
 CFLAGS+=-std=c11
-CFLAGS+=-Wall -Wextra -Werror
+CFLAGS+=-Wall -Wextra -Werror -Wconversion
 CFLAGS+=-Wno-unused-parameter
 CFLAGS+=-Wshadow -fno-common
 CFLAGS+=-Wno-builtin-declaration-mismatch
@@ -60,12 +68,9 @@ CFLAGS+=-T${PLATFORM}/platform.ld -Tlinker.ld
 
 INC+=-include ${PLATFORM}/config.h
 INC+=-include ${CONFIG_H}
-INC+=-Iinc 
-INC+=-I${DRIVERS}/inc
-INC+=-I${COMMON}/inc
+INC+=-Iinc -I${COMMON}/inc
 
 ELF=${BUILD}/${PROGRAM}.elf
-DEP=${BUILD}/${PROGRAM}.d
 BIN=${BUILD}/${PROGRAM}.bin
 DA=${BUILD}/${PROGRAM}.da
 
@@ -96,20 +101,28 @@ format:
 	clang-format -i ${shell find -wholename "*.[chC]" -not -path '*/.*'}
 
 clean:
-	rm -f ${ELF} ${DEP} ${BIN} ${DA}
+	rm -rf ${BUILD}
 
-${BUILD}:
-	mkdir -p $@
+${BUILD}/%.o: %.S
+	@mkdir -p ${@D}
+	${CC} ${CFLAGS} ${INC} -MMD -c -o $@ $<
 
-${BUILD}/%.elf: ${SRCS} | ${BUILD}
-	${CC} ${CFLAGS} ${INC} -MMD -o $@ ${filter %.S, $^} ${filter %.c, $^}
+${BUILD}/%.o: %.c
+	@mkdir -p ${@D}
+	${CC} ${CFLAGS} ${INC} -MMD -c -o $@ $<
 
-${BUILD}/%.bin: ${OBJS}
+${ELF}: ${OBJS}
+	@mkdir -p ${@D}
+	${CC} ${CFLAGS} ${INC} -o $@ ${OBJS}
+
+${BIN}: ${ELF}
+	@mkdir -p ${@D}
 	${OBJCOPY} -O binary $< $@
 
 ${BUILD}/%.da: ${BUILD}/%.elf
+	@mkdir -p ${@D}
 	${OBJDUMP} -d $< > $@
 
 .PHONY: all options clean dasm docs test kernel size
 
--include ${DEP}
+-include ${DEPS}

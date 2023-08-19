@@ -22,6 +22,9 @@ uint64_t csrr_mhartid(void);
 uint64_t csrr_mip(void);
 
 uint64_t csrr_mcycle(void);
+void csrw_mcycle(uint64_t val);
+uint64_t csrr_mhpmcounter3(void);
+void csrw_mhpmcounter3(uint64_t val);
 
 void csrw_mstatus(uint64_t val);
 
