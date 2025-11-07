@@ -20,7 +20,10 @@ typedef struct {
 	time_slot_t free; ///< Start of the allocated region.
 } __attribute__((aligned(16))) tsl_t;
 
-void tsl_init();
+typedef struct {
+	size_t size;	  ///< Number of time slice capabilities in the table.
+	tsl_t entries[];  ///< Array of time slice capabilities.
+} tsl_table_t;
 
 /**
  * Checks if the time slice capability is valid for the given owner and index.
@@ -32,7 +35,7 @@ void tsl_init();
  * @param i The index of the capability.
  * @return true if valid, false otherwise.
  */
-bool tsl_valid_access(pid_t owner, index_t i);
+bool tsl_valid_access(tsl_table_t *tt, pid_t owner, index_t i);
 
 /**
  * Transfer a time slice capability from one process to another.
@@ -43,7 +46,7 @@ bool tsl_valid_access(pid_t owner, index_t i);
  * @return ERR_SUCCESS if the capability is successfully granted,
  *         ERR_INVALID_ACCESS if the owner does not match the entry in the time table.
  */
-int tsl_transfer(pid_t owner, index_t i, pid_t new_owner);
+int tsl_transfer(tsl_table_t *tt, pid_t owner, index_t i, pid_t new_owner);
 
 /**
  * Retrieves a time slice capability from the time table.
@@ -54,7 +57,7 @@ int tsl_transfer(pid_t owner, index_t i, pid_t new_owner);
  * @return ERR_SUCCESS if the time slice capability is successfully retrieved,
  *         ERR_INVALID_ACCESS if the owner does not match the entry in the time table.
  */
-int tsl_get(pid_t owner, index_t i, tsl_t *cap);
+int tsl_get(tsl_table_t *tt, pid_t owner, index_t i, tsl_t *cap);
 
 /**
  * Derives a new time slice capability from an existing one.
@@ -69,7 +72,7 @@ int tsl_get(pid_t owner, index_t i, tsl_t *cap);
  *         ERR_INVALID_ACCESS if the owner does not match the entry in the time table,
  *         ERR_INVALID_ARGUMENT if the new time slice capability cannot be derived.
  */
-int tsl_derive(pid_t owner, index_t i, pid_t child_pid, fuel_t child_fuel, bool child_enabled, time_slot_t child_size);
+int tsl_derive(tsl_table_t *tt, pid_t owner, index_t i, pid_t child_pid, fuel_t child_fuel, bool child_enabled, time_slot_t child_size);
 
 /**
  * Revokes a time slice capability and its children.
@@ -79,7 +82,7 @@ int tsl_derive(pid_t owner, index_t i, pid_t child_pid, fuel_t child_fuel, bool 
  * @return ERR_SUCCESS if the time slice capability is successfully revoked,
  *         ERR_INVALID_ACCESS if the owner does not match the entry in the time table.
  */
-int tsl_revoke(pid_t owner, index_t i);
+int tsl_revoke(tsl_table_t *tt, pid_t owner, index_t i);
 
 /**
  * Deletes a time slice capability by invalidating its process ID.
@@ -89,7 +92,7 @@ int tsl_revoke(pid_t owner, index_t i);
  * @return ERR_SUCCESS if the time slice capability is successfully deleted,
  *         ERR_INVALID_ACCESS if the owner does not match the entry in the time table.
  */
-int tsl_delete(pid_t owner, index_t i);
+int tsl_delete(tsl_table_t *tt, pid_t owner, index_t i);
 
 /**
  * Enables or disables a time slice capability in the scheduler.
@@ -100,4 +103,4 @@ int tsl_delete(pid_t owner, index_t i);
  * @return ERR_SUCCESS if the time slice capability is successfully enabled or disabled,
  *         ERR_INVALID_ACCESS if the owner does not match the entry in the time table.
  */
-int tsl_set(pid_t owner, index_t i, bool enable);
+int tsl_set(tsl_table_t *tt, pid_t owner, index_t i, bool enable);
