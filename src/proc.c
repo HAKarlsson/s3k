@@ -49,10 +49,16 @@ pid_t proc_get_pid(const proc_t *p)
 /**
  * Sets a PMP slot for a process.
  */
-void proc_pmp_set(pid_t pid, pmp_slot_t slot, mem_perm_t rwx, pmp_addr_t addr)
+bool proc_pmp_set(pid_t pid, pmp_slot_t slot, mem_perm_t rwx, pmp_addr_t addr)
 {
+	proc_t *proc = _proc(pid);
+	if (slot >= ARRAY_SIZE(proc->pmp.addr) || proc->pmp.addr[slot] != 0) {
+		// PMP slot is already in use, handle error as needed.
+		return false;
+	}
 	_proc(pid)->pmp.cfg[slot] = PMP_MODE_NAPOT | rwx; // Set PMP permissions.
 	_proc(pid)->pmp.addr[slot] = addr;		  // Set PMP address.
+	return true;
 }
 
 /**
@@ -62,14 +68,6 @@ void proc_pmp_clear(pid_t pid, pmp_slot_t slot)
 {
 	_proc(pid)->pmp.cfg[slot] = 0;	// Clear PMP permissions.
 	_proc(pid)->pmp.addr[slot] = 0; // Clear PMP address.
-}
-
-/**
- * Checks if a PMP slot is set for a process.
- */
-bool proc_pmp_is_set(pid_t pid, pmp_slot_t slot)
-{
-	return _proc(pid)->pmp.addr[slot] != 0; // Check if the PMP slot is set.
 }
 
 /**

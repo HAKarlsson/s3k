@@ -108,8 +108,9 @@ pid_t proc_get_pid(const proc_t *p);
  * @param slot The PMP slot to configure.
  * @param rwx The permissions to set (read, write, execute).
  * @param addr The address to associate with the PMP slot.
+ * @return `true` if the PMP slot was successfully set, `false` if the slot is already in use.
  */
-void proc_pmp_set(pid_t pid, pmp_slot_t slot, mem_perm_t rwx, pmp_addr_t addr);
+bool proc_pmp_set(pid_t pid, pmp_slot_t slot, mem_perm_t rwx, pmp_addr_t addr);
 
 /**
  * @brief Clear a PMP slot for a process.
@@ -120,17 +121,6 @@ void proc_pmp_set(pid_t pid, pmp_slot_t slot, mem_perm_t rwx, pmp_addr_t addr);
  * @param slot The PMP slot to clear.
  */
 void proc_pmp_clear(pid_t pid, pmp_slot_t slot);
-
-/**
- * @brief Check if a PMP slot is set for a process.
- *
- * This function checks whether a PMP slot is configured for the specified process.
- *
- * @param pid The process ID of the process to check.
- * @param slot The PMP slot to check.
- * @return `true` if the PMP slot is set, `false` otherwise.
- */
-bool proc_pmp_is_set(pid_t pid, pmp_slot_t slot);
 
 /**
  * @brief Get the PMP configuration for a process.
