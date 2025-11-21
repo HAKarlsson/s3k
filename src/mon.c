@@ -116,11 +116,11 @@ int mon_revoke(pid_t owner, index_t i)
 		// Get the index of the next child capability.
 		index_t j = i + mon_table[i].cfree;
 
-		// Invalidate the child capability.
-		mon_table[j].owner = INVALID_PID;
-
 		// Reclaim the child's resources.
 		mon_table[i].cfree += mon_table[j].cfree;
+
+		// Invalidate the child capability.
+		mon_table[j] = (mon_t){0};
 
 		// Check for preemption.
 		if (UNLIKELY(preempt()))

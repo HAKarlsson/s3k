@@ -117,7 +117,7 @@ int tsl_revoke(tsl_table_t *tt, pid_t owner, index_t i)
 		tt->entries[i].free += tt->entries[j].free;
 
 		// Invalidate the child capability.
-		tt->entries[j].owner = INVALID_PID;
+		tt->entries[j] = (tsl_t){0};
 
 		if (UNLIKELY(preempt()))
 			break;

@@ -160,14 +160,14 @@ int ipc_revoke(pid_t owner, index_t i)
 		// Get the next child index.
 		index_t j = i + ipc_table[i].cfree;
 
-		// Invalidate the child capability.
-		ipc_table[j].owner = INVALID_PID;
-
 		// Reclaim the child's capability table.
 		ipc_table[i].cfree += ipc_table[j].cfree;
 
 		// Set revoke flag to prevent further derivations.
 		ipc_table[i].mode = IPC_MODE_REVOKE;
+
+		// Invalidate the child capability.
+		ipc_table[j] = (ipc_t){0};
 
 		// Check for preemption.
 		if (UNLIKELY(preempt()))

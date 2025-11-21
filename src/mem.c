@@ -6,14 +6,6 @@
 #include "proc.h"
 
 /**
- * Check if a memory access is valid.
- */
-bool mem_valid_access(mem_table_t *mt, pid_t owner, index_t i)
-{
-	return (i < mt->size) && (mt->entries[i].owner == owner);
-}
-
-/**
  * Check if the read-write-execute permissions are valid.
  */
 static bool _valid_rwx(word_t rwx)
@@ -92,7 +84,7 @@ int mem_derive(mem_table_t *mt, pid_t owner, index_t i, pid_t target, fuel_t cfr
 	}
 
 	// Update the current memory capability.
-	mem_table[i].cfree -= cfree;
+	mt->entries[i].cfree -= cfree;
 
 	// Calculate the index of the new memory capability.
 	word_t j = i + mt->entries[i].cfree;
@@ -130,12 +122,14 @@ int mem_revoke(mem_table_t *mt, pid_t owner, index_t i)
 		if (mt->entries[j].slot != 0) {
 			proc_pmp_clear(mt->entries[j].owner, mt->entries[j].slot - 1);
 		}
-		// Invalidate the child capability.
-		mt->entries[j].owner = INVALID_PID;
 
 		// Reclaim the child's capability mt.
 		mt->entries[i].cfree += mt->entries[j].cfree;
 
+		// Invalidate the child capability.
+		mt->entries[j] = (mem_t){0};
+
+		// Preempt if necessary.
 		if (UNLIKELY(preempt()))
 			break;
 	}

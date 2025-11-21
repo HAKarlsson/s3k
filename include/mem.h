@@ -12,7 +12,13 @@ typedef struct {
 	mem_addr_t size; ///< End address of the memory region.
 } __attribute__((aligned(sizeof(word_t)))) mem_t;
 
-
+/**
+ * @brief Memory capability table.
+ * 
+ * This structure represents a table of memory capabilities,
+ * where each entry corresponds to a memory capability.
+ * It also includes the size of the table for bounds checking.
+ */
 typedef struct {
 	size_t size;    ///< Size of the memory table.
 	mem_t entries[]; ///< Array of memory capabilities.
@@ -28,7 +34,10 @@ typedef struct {
  * @param i The index of the capability.
  * @return true if valid, false otherwise.
  */
-bool mem_valid_access(mem_table_t *mt, pid_t owner, index_t i);
+static inline bool mem_valid_access(mem_table_t *mt, pid_t owner, index_t i)
+{
+	return (i < mt->size) && (mt->entries[i].owner == owner);
+}
 
 /**
  * Transfer a memory capability from one process to another.
