@@ -39,7 +39,7 @@ bool ipc_valid_access(pid_t owner, index_t i)
 static bool _valid_derivation(ipc_t *cap, fuel_t csize, ipc_mode_t mode, ipc_flag_t flag)
 {
 	// Check if sufficient cfree is available.
-	if (csize >= cap->cfree && csize > 0) {
+	if (csize == 0 || csize >= cap->cfree) {
 		return false;
 	}
 
