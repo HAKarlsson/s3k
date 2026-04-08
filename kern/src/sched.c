@@ -137,9 +137,15 @@ static proc_t *sched_next(hart_t hart, uint64_t *timeout)
 	// Try to acquire the process
 	lock_acquire(false);
 	bool proc_acquired = proc_acquire(slot.pid);
-	proc->timeout = *timeout;
-	lock_release();
-	return proc_acquired ? proc : NULL;
+
+	if (!proc_acquired) {
+		lock_release();
+		return NULL;
+	} else {
+		proc->timeout = *timeout;
+		lock_release();
+		return proc;
+	}
 }
 
 /**
