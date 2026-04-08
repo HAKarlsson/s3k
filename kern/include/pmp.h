@@ -28,7 +28,7 @@ static inline word_t pmp_napot_decode_size(word_t addr)
  * @brief Encode a base address and size into a PMP NAPOT address.
  *
  * @param base The base address to encode.
- * @param size The size to encode.
+ * @param size The size (potens of 2 >= 4) to encode.
  * @return The encoded NAPOT address.
  */
 static inline word_t pmp_napot_encode(word_t base, word_t size)
