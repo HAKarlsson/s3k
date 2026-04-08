@@ -69,10 +69,11 @@ _init:
 
 	// Unlock the kernel initialization lock.
 	la	t1,_lock
-	amoor.w x0,t1,(t1)
+	li	t0,1
+	amoor.w.aqrl x0,t0,(t1)
 _wait:
 	la	t1,_lock
-	amoor.w   t1,x0,(t1)
+	amoor.w.aqrl t1,x0,(t1)
 	beqz	t1,_wait
 
 	// Initialize the first process and transfer control to it.
