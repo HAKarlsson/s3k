@@ -60,7 +60,7 @@ static bool _valid_pmp_args(mem_t cap, word_t slot, word_t rwx, word_t addr)
 {
 	word_t base = pmp_napot_decode_base(addr);
 	word_t size = pmp_napot_decode_size(addr);
-
+	// Note: addition of base + size and cap.base + cap.size are guaranteed to not wrap around.
 	return (slot > 0) && (slot <= MAX_PMP_SLOT) && (cap.base <= base) && (base + size <= cap.base + cap.size)
 	       && ((rwx & cap.rwx) == rwx) && _valid_rwx(rwx);
 }
