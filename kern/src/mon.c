@@ -72,6 +72,11 @@ pid_t mon_get_pid(pid_t owner, index_t i)
 	return mon_table[i].pid;
 }
 
+static bool mon_derivable(mon_t parent, fuel_t csize)
+{
+	return csize != 0 && csize < parent.cfree;
+}
+
 /**
  * Derives a new monitor capability from an existing one.
  */
@@ -81,7 +86,7 @@ int mon_derive(pid_t owner, index_t i, pid_t target, fuel_t csize)
 		return ERR_INVALID_ACCESS;
 	}
 
-	if (UNLIKELY(csize <= 0 || mon_table[i].cfree < csize)) {
+	if (UNLIKELY(!mon_derivable(mon_table[i], csize))) {
 		return ERR_INVALID_ARGUMENT;
 	}
 
