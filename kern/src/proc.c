@@ -117,6 +117,8 @@ bool proc_acquire(pid_t pid)
  */
 void proc_suspend(pid_t pid)
 {
+	// Suspend destroys IPC blocked state.
+	// Monitor is allowed to disrupt the IPC of the target process.
 	_proc(pid)->state &= PROC_STATE_ACQUIRED;  // Remove all other states but acquired.
 	_proc(pid)->state |= PROC_STATE_SUSPENDED; // Mark the process as suspended.
 }
