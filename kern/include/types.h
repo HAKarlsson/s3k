@@ -61,7 +61,7 @@ typedef enum err {
 	ERR_INVALID_ARGUMENT = -2, ///< Invalid argument.
 	ERR_INVALID_STATE = -3,	   ///< Invalid state.
 	ERR_SLOT_IN_USE = -4,	   ///< Slot already in use.
-	ERR_TIMEOUT = -5,	   ///< Timeout occurred.
+	ERR_INTERRUPTED = -5,	   ///< Timeout or suspension occurred.
 } err_t;
 
 /**

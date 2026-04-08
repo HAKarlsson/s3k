@@ -388,7 +388,11 @@ int ipc_call(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, p
 		proc_release(receiver);
 		sender->timeout = UINT64_MAX;
 	}
-	return ERR_TIMEOUT;
+
+	// Return interrupted by default, visible when:
+	// - Monitor suspends the process.
+	// - Yielding call times out.
+	return ERR_INTERRUPTED;
 }
 
 /**
