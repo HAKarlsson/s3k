@@ -95,6 +95,7 @@ uint64_t rtc_get_timeout(word_t hartid)
  */
 void rtc_set_timeout(word_t hartid, uint64_t time)
 {
+	// Preemption is disabled, i.e., no spurious interrupts.
 	__mtimecmp[hartid][0] = (uint32_t)time;		// Set low 32 bits.
 	__mtimecmp[hartid][1] = (uint32_t)(time >> 32); // Set high 32 bits.
 }
