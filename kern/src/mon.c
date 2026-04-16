@@ -4,6 +4,7 @@
 #include "preempt.h"
 #include "proc.h"
 #include "types.h"
+#include "rtc.h"
 
 /**
  * Table of monitor capabilities.
@@ -183,7 +184,8 @@ int mon_yield(pid_t owner, index_t i, proc_t **next)
 	if (UNLIKELY(!mon_valid_access(owner, i))) {
 		return ERR_INVALID_ACCESS;
 	}
-	if (UNLIKELY(!proc_acquire(mon_table[i].pid))) {
+	uint64_t time = rtc_get_time();
+	if (UNLIKELY(!proc_acquire(mon_table[i].pid, time))) {
 		return ERR_INVALID_STATE;
 	}
 	*next = proc_get(mon_table[i].pid);

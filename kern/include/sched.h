@@ -53,4 +53,4 @@ void sched_set_pid(hart_t hart, pid_t pid, time_slot_t begin);
  *
  * @return A pointer to the next process to run.
  */
-proc_t *sched(void);
+proc_t *sched(proc_t *proc);

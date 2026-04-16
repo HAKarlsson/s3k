@@ -154,7 +154,9 @@ void proc_pmp_get(pid_t pid, pmp_slot_t slot, mem_perm_t *rwx, pmp_addr_t *addr)
  * @note This function should be called before executing a process to ensure exclusive access.
  * @note The function asserts that the PID is valid and within bounds.
  */
-bool proc_acquire(pid_t pid);
+bool proc_acquire(pid_t pid, uint64_t time);
+
+bool proc_is_running(pid_t pid);
 
 /**
  * @brief Suspend a process.

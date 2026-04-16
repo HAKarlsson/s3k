@@ -7,15 +7,15 @@ sources = files(
     'src/exception.c',
     'src/interrupt.c',
     'src/ipc.c',
-    'src/lock.c',
     'src/mem.c',
     'src/mon.c',
     'src/proc.c',
     'src/rtc.c',
     'src/sched.c',
     'src/syscall.c',
+    'src/tlock.c',
+    'src/trap.c',
     'src/tsl.c',
-    'src/ttas.c',
 )
 
 incdir = include_directories('include')

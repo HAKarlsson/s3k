@@ -102,13 +102,14 @@ word_t proc_get_register(pid_t pid, word_t regid)
 /**
  * Acquires a process by its PID.
  */
-bool proc_acquire(pid_t pid)
+bool proc_acquire(pid_t pid, word_t time)
 {
-	proc_state_t state = _proc(pid)->state;
-	if (state != PROC_STATE_READY) {
+	proc_t *proc = proc_get(pid);
+	proc_state_t state = proc->state;
+	if (state != PROC_STATE_READY || time < proc->timeout) {
 		return false;
 	}
-	_proc(pid)->state = PROC_STATE_ACQUIRED; // Mark the process as acquired.
+	proc->state = PROC_STATE_ACQUIRED; // Mark the process as acquired.
 	return true;
 }
 
@@ -167,5 +168,7 @@ bool proc_ipc_block(pid_t pid, index_t i)
  */
 void proc_release(pid_t pid)
 {
-	_proc(pid)->state &= ~PROC_STATE_ACQUIRED; // Mark the process as ready.
+	proc_t *proc = proc_get(pid);
+	proc->state &= ~PROC_STATE_ACQUIRED; // Mark the process as ready.
+	csrw_pmpcfg0(0);
 }

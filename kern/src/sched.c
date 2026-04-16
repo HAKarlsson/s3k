@@ -1,8 +1,8 @@
 #include "sched.h"
 
 #include "csr.h"
-#include "lock.h"
 #include "rtc.h"
+#include "current.h"
 
 extern void temporal_fence(void);
 
@@ -102,72 +102,43 @@ void sched_set_pid(hart_t hart, pid_t pid, time_slot_t begin)
  * Advances the current slot if needed, checks for valid and ready processes.
  * Sets the timeout for the next scheduling event.
  */
-static proc_t *sched_next(hart_t hart, uint64_t *timeout)
+static proc_t *sched_next(proc_t *proc, hart_t hart, uint64_t *timeout)
 {
-	bool swapped = false;
+	if (proc != NULL) {
+		proc_release(proc->pid);
+	}
 
 	// Lock because other processes may be accessing the schedule
-	lock_acquire(false);
 	uint64_t rtc_slot = sched_rtc_slot();
 	uint64_t offset = curr[hart] % MAX_TIME_SLOT;
 	// Advance curr if the current slot has expired
 	if (curr[hart] + schedule[hart][offset].length <= rtc_slot) {
 		curr[hart] += schedule[hart][offset].length;
-		swapped = true;
 	}
 	frame_t slot = schedule[hart][curr[hart] % MAX_TIME_SLOT];
-	*timeout = slot2time(curr[hart] + slot.length);
-	lock_release();
 	// Release lock because we do not want to block when executing temporal fence.
 
-	if (swapped) {
-		temporal_fence(); // Insert a temporal fence if we swapped slots
-	}
-
-	if (slot.pid == INVALID_PID) {
+	if (slot.pid == INVALID_PID || !proc_acquire(slot.pid, slot2time(rtc_slot))) {
+		*timeout = slot2time(curr[hart] + 1);
 		return NULL; // No process scheduled for this slot
 	}
 
-	// We now have a process we may schedule.
-	proc_t *proc = proc_get(slot.pid);
-	if (proc->timeout > slot2time(rtc_slot)) {
-		return NULL; // Process is sleeping or waiting
-	}
-
-	// Try to acquire the process
-	lock_acquire(false);
-	bool proc_acquired = proc_acquire(slot.pid);
-
-	if (!proc_acquired) {
-		lock_release();
-		return NULL;
-	} else {
-		proc->timeout = *timeout;
-		lock_release();
-		return proc;
-	}
+	proc = proc_get(slot.pid);
+	proc->timeout = *timeout;
+	*timeout = slot2time(curr[hart] + slot.length);
+	return proc;
 }
 
 /**
  * Main scheduler function.
  * Loops until a ready process is found, otherwise waits for an interrupt.
  */
-proc_t *sched(void)
+proc_t *sched(proc_t *proc)
 {
 	hart_t hart = csrr_mhartid();
-	uint64_t timeout;
+	uint64_t timeout = 0;
 
-	while (1) {
-		proc_t *next = sched_next(hart, &timeout);
-		rtc_set_timeout(hart, timeout);
-
-		if (next != NULL) {
-			return next; // Return the next ready process
-		}
-
-		// Wait for interrupt if no process is ready
-		while (!(csrr_mip() & 128)) {
-			__asm__ volatile("wfi");
-		}
-	}
+	proc_t *next = sched_next(proc, hart, &timeout);
+	rtc_set_timeout(hart, timeout);
+	return next;
 }

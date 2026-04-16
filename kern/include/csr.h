@@ -2,14 +2,14 @@
 
 #include "types.h"
 
-static inline uint64_t csrr_mcycle(void)
+static inline word_t csrr_mcycle(void)
 {
-	uint64_t val;
+	word_t val;
 	__asm__ volatile("csrr %0, mcycle" : "=r"(val));
 	return val;
 }
 
-static inline void csrw_mcycle(uint64_t val)
+static inline void csrw_mcycle(word_t val)
 {
 	__asm__ volatile("csrw mcycle,%0" ::"r"(val));
 }
@@ -26,4 +26,9 @@ static inline word_t csrr_mhartid(void)
 	word_t val;
 	__asm__ volatile("csrr %0, mhartid" : "=r"(val));
 	return val;
+}
+
+static inline void csrw_pmpcfg0(word_t val)
+{
+	__asm__ volatile("csrw pmpcfg0,%0" ::"r"(val));
 }

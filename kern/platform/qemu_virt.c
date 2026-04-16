@@ -1,6 +1,5 @@
 #include "csr.h"
 #include "ipc.h"
-#include "lock.h"
 #include "mem.h"
 #include "mon.h"
 #include "pmp.h"
@@ -31,7 +30,6 @@ void kernel_init(void)
 	mon_init();
 	ipc_init();
 	sched_init();
-	lock_init();
 	proc_init(RAM_BASE);
 
 	mem_pmp_set((pid_t)1, (index_t)0, (pmp_slot_t)1, RAM_PERM, pmp_napot_encode(RAM_BASE, RAM_SIZE));
