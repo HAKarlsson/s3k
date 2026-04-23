@@ -108,6 +108,7 @@ typedef enum capty {
 } capty_t;
 
 #define INVALID_PID ((pid_t)0)					       ///< Invalid PID constant.
+#define INIT_PID ((pid_t)1)					       ///< PID of the initial process.
 #define MAX_PID ((pid_t)_MAX_PID)				       ///< Maximum PID constant.
 #define MAX_PMP_SLOT ((pmp_slot_t)_MAX_PMP_SLOT)		       ///< Maximum PMP slot constant.
 #define MAX_MEMORY_FUEL ((fuel_t)_MAX_MEMORY_FUEL)		       ///< Maximum memory capabilities.

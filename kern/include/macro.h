@@ -1,6 +1,21 @@
 #pragma once
 
 /**
+ * @brief Asserts a condition at runtime in debug builds.
+ *
+ * In debug builds (when NDEBUG is not defined), if the condition is false,
+ * execution is halted via an `ebreak` instruction (RISC-V software breakpoint).
+ * In release builds, the expression is evaluated but no check is performed.
+ *
+ * @param x The condition to assert.
+ */
+#ifdef NDEBUG
+#define KASSERT(x) do { if (!(x)) __builtin_unreachable(); } while (0)
+#else
+#define KASSERT(x) do { if (!(x)) __asm__ volatile("ebreak"); } while (0)
+#endif
+
+/**
  * @brief Calculates the number of elements in an array.
  *
  * @param a The array whose size is to be calculated.

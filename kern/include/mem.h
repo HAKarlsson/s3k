@@ -1,142 +1,136 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Henrik Karlsson <hakarlsson@proton.me>
+//
+// mem.h -- Memory capability management for the s3k microkernel.
+//
+// Each memory capability represents an owned, permission-constrained view of a
+// contiguous physical address range. Capabilities are arranged in a flat table
+// (mem_table) partitioned into fixed-size subtables of MAX_MEMORY_FUEL slots.
+// Within each subtable, slot 0 is the root capability; derived children occupy
+// the slots that follow it. The fields cfree and csize together encode how many
+// slots remain free for further derivation and how large the subtable is.
+//
+// Invariants maintained by this module:
+//
+//   Capability states:
+//     - live:    owner != INVALID_PID. The capability is owned and usable.
+//     - deleted: owner == INVALID_PID, cfree > 0. Owner cleared by
+//                mem_delete; cfree/csize preserved for revoke traversal.
+//     - free:    fully zeroed (cfree == 0). Belongs to an ancestor's free pool.
+//
+//   Subtable layout:
+//     - The table is divided into NUM_MEMORY_CAPS subtables of MAX_MEMORY_FUEL
+//       slots each. Subtable i starts at index i * MAX_MEMORY_FUEL.
+//     - Within a subtable rooted at index i:
+//         * Slots [i+1, i+cfree)  are free slots.
+//         * Slots [i+cfree, i+csize) are live or deleted descendants of i
+//           (all generations), in the order they were derived.
+//         * cfree <= csize <= MAX_MEMORY_FUEL at all times.
+//     - Every live or deleted cap has cfree > 0 (fuel > 0 enforced at
+//       derivation; cfree only grows during revocation).
+//     - { [i, i+cfree) } over all live/deleted caps partitions the subtable,
+//       encoding the tree as a flat array (revoke needs no explicit links).
+//
+//   Address range:
+//     - For every live cap: base < base + size (no wrap; enforced at init and derivation).
+//     - child.base >= parent.base  and  child.base + child.size <= parent.base + parent.size.
+//
+//   Permissions:
+//     - rwx is either MEM_PERM_NONE or a combination that includes MEM_PERM_R
+//       (write-only and execute-only are not permitted).
+//     - A child's permissions are always a subset of its parent's:
+//       (child.rwx & parent.rwx) == child.rwx.
+//
+//   PMP:
+//     - A live capability's slot field is 0 if no PMP entry is active, or a
+//       1-based PMP slot index otherwise.
+//     - The PMP entry's region fits within the capability's address range and
+//       its permissions are a subset of the capability's permissions.
+//     - PMP mappings are cleared before a capability changes owner (transfer)
+//       or transitions to deleted or free (delete/revoke).
+
 #pragma once
 
 #include "types.h"
 
 typedef struct {
-	pid_t owner;	 ///< Process ID of the owner of the capability.
-	fuel_t cfree;	 ///< Remaining cfree for the capability.
-	fuel_t csize;	 ///< Initial cfree allocated to the capability.
-	pmp_slot_t slot; ///< PMP slot used.
-	mem_perm_t rwx;	 ///< Permissions (Read, Write, Execute) encoded as bits.
+	pid_t owner;	 ///< Owning process (INVALID_PID if deleted).
+	fuel_t cfree;	 ///< Free slots in this capability's subtable.
+	fuel_t csize;	 ///< Total slots allocated to this capability's subtable.
+	pmp_slot_t slot; ///< Active PMP slot (1-based; 0 = no mapping).
+	mem_perm_t rwx;	 ///< Permission bits (MEM_PERM_{R,W,X}).
 	mem_addr_t base; ///< Start address of the memory region.
-	mem_addr_t size; ///< End address of the memory region.
+	mem_addr_t size; ///< Size of the memory region in bytes.
 } __attribute__((aligned(sizeof(word_t)))) mem_t;
 
 /**
- * @brief Initializes the memory subsystem.
+ * Initialize the memory capability table.
  *
- * @param init_mems Array of initial memory capabilities.
+ * Each entry in @p init_mems becomes the root of one subtable at
+ * index i * MAX_MEMORY_FUEL with cfree == csize == MAX_MEMORY_FUEL.
  */
 void mem_init(mem_t init_mems[]);
 
-/**
- * @brief Checks if the memory capability is valid for the given owner and index.
- *
- * This function checks if the memory capability at the given index is valid
- * for the specified owner process.
- *
- * @param owner The owner of the capability.
- * @param i The index of the capability.
- * @return true if valid, false otherwise.
- */
+/** Return true if @p i is in bounds and owned by @p owner. */
 bool mem_valid_access(pid_t owner, index_t i);
 
 /**
- * Transfer a memory capability from one process to another.
+ * Transfer capability @p i from @p owner to @p new_owner.
  *
- * @param owner The process ID of the current owner of the memory capability.
- * @param index The index in the memory table of the capability to be transferred.
- * @param new_owner The process ID of the new owner of the memory capability.
- * @return ERR_SUCCESS if the capability is successfully granted,
- *         ERR_INVALID_ACCESS if the owner does not match the entry in the memory table.
+ * Clears any active PMP mapping before changing owner.
+ * Returns ERR_INVALID_ACCESS if the access check fails.
  */
-int mem_transfer(pid_t owner, index_t index, pid_t new_owner);
+int mem_transfer(pid_t owner, index_t i, pid_t new_owner);
 
 /**
- * Retrieves a memory capability from the memory table.
+ * Read the capability at @p i + @p offset in the same subtable.
  *
- * @param owner The process ID associated with the memory capability.
- * @param index The index in the memory table.
- * @param mem_t A pointer to store the retrieved memory capability.
- * @return ERR_SUCCESS if the memory capability is successfully retrieved,
- *         ERR_INVALID_ACCESS if the owner does not match the entry in the memory table.
- */
-int mem_get(pid_t owner, index_t i, mem_t *mem_t);
-
-/**
- * Retrieves a memory capability from the memory subtable with an offset.
- *
- * @param owner The process ID associated with the memory capability.
- * @param i The index in the memory table.
- * @param offset The offset within the capability's range.
- * @param cap A pointer to store the retrieved memory capability.
- * @return ERR_SUCCESS if the memory capability is successfully retrieved,
- *         ERR_INVALID_ACCESS if the owner does not match the entry in the memory table,
- *         ERR_INVALID_ARGUMENT if the offset is out of range.
+ * Returns ERR_INVALID_ACCESS, or ERR_INVALID_ARGUMENT if @p offset >= csize.
  */
 int mem_introspect(pid_t owner, index_t i, fuel_t offset, mem_t *cap);
 
 /**
- * Derives a new memory capability from an existing one.
+ * Derive a child capability from @p i.
  *
- * @param owner The process ID associated with the existing memory capability.
- * @param index The index in the memory table of the existing capability.
- * @param child_pid The process ID for the new capability.
- * @param child_fuel The amount of cfree for the new capability.
- * @param child_rwx The permissions for the new capability.
- * @param child_base The start address of the new capability's memory region.
- * @param child_size The end address of the new capability's memory region.
- * @return The index of the new memory capability if successfully derived,
- *         ERR_INVALID_ACCESS if the owner does not match the entry in the memory table,
- *         ERR_INVALID_ARGUMENT if the new memory capability cannot be derived.
+ * Consumes @p fuel slots from @p i's free pool. Child region and permissions
+ * must be subsets of the parent's. Returns the child's table index on success,
+ * ERR_INVALID_ACCESS, or ERR_INVALID_ARGUMENT.
  */
-int mem_derive(pid_t owner, index_t i, pid_t child_pid, fuel_t child_fuel, mem_perm_t child_rwx, mem_addr_t child_base,
-	       mem_addr_t child_size);
+int mem_derive(pid_t owner, index_t i, pid_t new_owner, fuel_t fuel, mem_perm_t rwx, mem_addr_t base, mem_addr_t size);
 
 /**
- * Revokes a memory capability and its children.
+ * Revoke all descendants of @p i, reclaiming their slots.
  *
- * @param owner The process ID associated with the memory capability.
- * @param index The index in the memory table.
- * @return ERR_SUCCESS if the memory capability is successfully revoked,
- *         ERR_INVALID_ACCESS if the owner does not match the entry in the memory table.
+ * Preemptible; returns remaining descendant count (0 = fully revoked).
+ * Returns ERR_INVALID_ACCESS on failure.
  */
 int mem_revoke(pid_t owner, index_t i);
 
 /**
- * Deletes a memory capability by invalidating its process ID.
+ * Delete capability @p i (set owner to INVALID_PID).
  *
- * @param owner The process ID associated with the memory capability.
- * @param index The index in the memory table.
- * @return ERR_SUCCESS if the memory capability is successfully deleted,
- *         ERR_INVALID_ACCESS if the owner does not match the entry in the memory table.
+ * Preserves subtable layout fields for parent revoke traversal.
+ * Clears any active PMP mapping. Returns ERR_INVALID_ACCESS on failure.
  */
 int mem_delete(pid_t owner, index_t i);
 
 /**
- * Enables a memory capability by setting a PMP slot.
+ * Install a NAPOT PMP entry for capability @p i.
  *
- * @param owner The process ID of the owner of the memory capability.
- * @param index The index in the memory table of the capability to be enabled.
- * @param slot The PMP slot to be set.
- * @param rwx The permissions for the PMP slot.
- * @param addr The address for the PMP slot.
- * @return ERR_SUCCESS if the capability is successfully enabled,
- *         ERR_INVALID_ACCESS if the owner does not match the entry in the memory table,
- *         ERR_INVALID_ARGUMENT if the PMP arguments are invalid,
- *         ERR_SLOT_IN_USE if the PMP slot is already in use.
+ * @p slot is 1-based; region and permissions must fit within the capability.
+ * Replaces any existing mapping; reconfigures in place if @p slot matches the
+ * current slot. Returns ERR_INVALID_ACCESS, ERR_INVALID_ARGUMENT, or
+ * ERR_SLOT_IN_USE if @p slot is held by another capability.
  */
-int mem_pmp_set(pid_t owner, index_t i, pmp_slot_t slot, word_t rwx, word_t addr);
+int mem_pmp_set(pid_t owner, index_t i, pmp_slot_t slot, mem_perm_t rwx, pmp_addr_t addr);
 
 /**
- * Retrieves the PMP configuration for a memory capability.
+ * Read the active PMP configuration for capability @p i.
  *
- * @param owner The process ID of the owner of the memory capability.
- * @param index The index in the memory table of the capability.
- * @param slot A pointer to store the PMP slot.
- * @param rwx A pointer to store the permissions for the PMP slot.
- * @param addr A pointer to store the address for the PMP slot.
- * @return ERR_SUCCESS if the PMP configuration is successfully retrieved,
- *         ERR_INVALID_ACCESS if the owner does not match the entry in the memory table.
+ * If no mapping is active, *@p slot, *@p rwx, and *@p addr are all set to 0.
+ * Returns ERR_INVALID_ACCESS on failure.
  */
 int mem_pmp_get(pid_t owner, index_t i, pmp_slot_t *slot, mem_perm_t *rwx, pmp_addr_t *addr);
 
-/**
- * Disables a memory capability by clearing its PMP slot.
- *
- * @param owner The process ID of the owner of the memory capability.
- * @param index The index in the memory table of the capability to be disabled.
- * @return ERR_SUCCESS if the capability is successfully disabled,
- *         ERR_INVALID_ACCESS if the owner does not match the entry in the memory table.
- */
+/** Clear the active PMP mapping for capability @p i, if any. */
 int mem_pmp_clear(pid_t owner, index_t i);
