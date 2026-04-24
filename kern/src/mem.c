@@ -64,11 +64,11 @@ static bool pmp_args_valid(const mem_t *cap, word_t slot, mem_perm_t rwx, pmp_ad
 {
 	KASSERT(cap->owner != INVALID_PID);
 
+	if (addr > PMP_ADDR_MAX)
+		return false;
+
 	word_t base = pmp_napot_decode_base(addr);
 	word_t size = pmp_napot_decode_size(addr);
-	// Reject zero-size or overflowing NAPOT encodings (e.g. addr = ~0UL).
-	if (size == 0 || base + size <= base)
-		return false;
 
 	return (slot > 0) && (slot <= MAX_PMP_SLOT) && (cap->base <= base) && (base + size <= cap->base + cap->size)
 	       && ((rwx & cap->rwx) == rwx) && perm_valid(rwx);

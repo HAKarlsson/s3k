@@ -2,6 +2,10 @@
 
 #include "types.h"
 
+/// Maximum value of a PMP-encoded address. The physical address space is 56-bit,
+/// and pmpaddr stores PA[55:2], so valid pmpaddr values are in [0, 2^54 - 1].
+#define PMP_ADDR_MAX ((1ULL << 54) - 1)
+
 /**
  * @brief Decode the base address from a PMP NAPOT-encoded address.
  *
@@ -28,7 +32,7 @@ static inline word_t pmp_napot_decode_size(word_t addr)
  * @brief Encode a base address and size into a PMP NAPOT address.
  *
  * @param base The base address to encode.
- * @param size The size (potens of 2 >= 4) to encode.
+ * @param size The size (power of 2 >= 8) to encode.
  * @return The encoded NAPOT address.
  */
 static inline word_t pmp_napot_encode(word_t base, word_t size)
