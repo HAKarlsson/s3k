@@ -12,7 +12,7 @@
 // subtables of MAX_MEMORY_FUEL slots each.
 static mem_t mem_table[MEM_TABLE_SIZE];
 
-_Static_assert(NUM_MEMORY_CAPS * MAX_MEMORY_FUEL == MEM_TABLE_SIZE,
+_Static_assert(NUM_MEMORY_CAPS *MAX_MEMORY_FUEL == MEM_TABLE_SIZE,
 	       "mem_table is too small for NUM_MEMORY_CAPS * MAX_MEMORY_FUEL entries");
 
 // MEM_PERM_NONE or any combination including MEM_PERM_R (no write-only/execute-only).

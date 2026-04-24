@@ -10,9 +10,17 @@
  * @param x The condition to assert.
  */
 #ifdef NDEBUG
-#define KASSERT(x) do { if (!(x)) __builtin_unreachable(); } while (0)
+#define KASSERT(x)                               \
+	do {                                     \
+		if (!(x))                        \
+			__builtin_unreachable(); \
+	} while (0)
 #else
-#define KASSERT(x) do { if (!(x)) __asm__ volatile("ebreak"); } while (0)
+#define KASSERT(x)                                  \
+	do {                                        \
+		if (!(x))                           \
+			__asm__ volatile("ebreak"); \
+	} while (0)
 #endif
 
 /**
