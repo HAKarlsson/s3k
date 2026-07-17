@@ -1,16 +1,6 @@
 {
-    "name" : "riscv-picolibc",
+    "name" : "RISC-V S3K Development Container",
     "build" : {
       "dockerfile": "Dockerfile"
-    },
-    "customizations": {
-      "vscode": {
-        "extensions": [
-          "ms-vscode.cpptools",
-          "ms-vscode.cpptools-extension-pack",
-          "ms-vscode.makefile-tools",
-          "mesonbuild.mesonbuild"
-        ]
-      }
     }
 }
