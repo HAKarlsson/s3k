@@ -1,6 +1,8 @@
 # S3K API Reference
 
-This document describes the S3K system call API as provided by the S3K library. Each function is available to user processes and corresponds to a kernel handler.
+This document describes the S3K system call API as provided by the S3K library.
+
+The S3K API header files are located in the `lib/include` directory of the project root. The main API header is `s3k.h`, which includes all other headers.
 
 ---
 
