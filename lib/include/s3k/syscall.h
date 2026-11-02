@@ -297,9 +297,8 @@ static inline int s3k_mem_pmp_set(s3k_index_t i, s3k_pmp_slot_t slot, s3k_mem_pe
 	register s3k_word_t a0 __asm__("a0") = S3K_SYSCALL_MEM_PMP_SET;
 	register s3k_word_t a1 __asm__("a1") = i;
 	register s3k_word_t a2 __asm__("a2") = slot;
-	register s3k_word_t a3 __asm__("a3") = perm;
-	register s3k_word_t a4 __asm__("a4") = addr;
-	__asm__ volatile("ecall" : "+r"(a0) : "r"(a1), "r"(a2), "r"(a3), "r"(a4));
+	register s3k_word_t a3 __asm__("a3") = perm << 56 | addr;
+	__asm__ volatile("ecall" : "+r"(a0) : "r"(a1), "r"(a2), "r"(a3));
 	return a0;
 }
 
@@ -579,9 +578,8 @@ static inline int s3k_mon_mem_pmp_set(s3k_index_t i, s3k_index_t j, s3k_pmp_slot
 	register s3k_word_t a1 __asm__("a1") = i;
 	register s3k_word_t a2 __asm__("a2") = j;
 	register s3k_word_t a3 __asm__("a3") = slot;
-	register s3k_word_t a4 __asm__("a4") = perm;
-	register s3k_word_t a5 __asm__("a5") = addr;
-	__asm__ volatile("ecall" : "+r"(a0) : "r"(a1), "r"(a2), "r"(a3), "r"(a4), "r"(a5));
+	register s3k_word_t a4 __asm__("a4") = perm << 56 | addr;
+	__asm__ volatile("ecall" : "+r"(a0) : "r"(a1), "r"(a2), "r"(a3), "r"(a4));
 	return a0;
 }
 

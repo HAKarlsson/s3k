@@ -58,9 +58,6 @@ static bool _derivable(mem_t parent, fuel_t csize, word_t rwx, word_t base, word
  */
 static bool _valid_pmp_args(mem_t cap, word_t slot, word_t rwx, word_t addr)
 {
-    if ((addr >> 56) != 0)
-        return false;
-
 	word_t base = pmp_napot_decode_base(addr);
 	word_t size = pmp_napot_decode_size(addr);
 
@@ -194,11 +191,14 @@ int mem_delete(pid_t owner, index_t i)
 /**
  * Enables a memory capability by setting the PMP slot.
  */
-int mem_pmp_set(pid_t owner, index_t i, pmp_slot_t slot, word_t rwx, word_t addr)
+int mem_pmp_set(pid_t owner, index_t i, pmp_slot_t slot, word_t pmpconf)
 {
 	if (UNLIKELY(!mem_valid_access(owner, i))) {
 		return ERR_INVALID_ACCESS;
 	}
+
+    word_t rwx = (pmpconf >> 56) & 0xFF;
+    word_t addr = pmpconf & 0xFFFFFFFFFFFFFF;
 
 	// Validate PMP arguments.
 	if (UNLIKELY(!_valid_pmp_args(mem_table[i], slot, rwx, addr))) {

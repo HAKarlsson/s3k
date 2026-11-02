@@ -274,7 +274,7 @@ static proc_t *syscall_mem_pmp_get(pid_t pid, word_t args[8])
  */
 static proc_t *syscall_mem_pmp_set(pid_t pid, word_t args[8])
 {
-	args[0] = mem_pmp_set(pid, args[1], args[2], args[3], args[4]);
+	args[0] = mem_pmp_set(pid, args[1], args[2], args[3]);
 	return current;
 }
 
@@ -558,7 +558,7 @@ static proc_t *syscall_mon_mem_pmp_set(pid_t pid, word_t args[8])
 	pid_t target = mon_get_pid(pid, args[1]);
 	args[0] = ERR_INVALID_ACCESS;
 	if (target != INVALID_PID) {
-		args[0] = mem_pmp_set(target, args[2], args[3], args[4], args[5]);
+		args[0] = mem_pmp_set(target, args[2], args[3], args[4]);
 	}
 	return current;
 }

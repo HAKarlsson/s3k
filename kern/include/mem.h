@@ -109,14 +109,13 @@ int mem_delete(pid_t owner, index_t i);
  * @param owner The process ID of the owner of the memory capability.
  * @param index The index in the memory table of the capability to be enabled.
  * @param slot The PMP slot to be set.
- * @param rwx The permissions for the PMP slot.
- * @param addr The address for the PMP slot.
+ * @param pmpconf The rwx (8 high bits) and address (56 lower bits).
  * @return ERR_SUCCESS if the capability is successfully enabled,
  *         ERR_INVALID_ACCESS if the owner does not match the entry in the memory table,
  *         ERR_INVALID_ARGUMENT if the PMP arguments are invalid,
  *         ERR_SLOT_IN_USE if the PMP slot is already in use.
  */
-int mem_pmp_set(pid_t owner, index_t i, pmp_slot_t slot, word_t rwx, word_t addr);
+int mem_pmp_set(pid_t owner, index_t i, pmp_slot_t slot, word_t pmpconf);
 
 /**
  * Retrieves the PMP configuration for a memory capability.
