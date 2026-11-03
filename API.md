@@ -16,14 +16,32 @@ This document describes the S3K system call API as provided by the S3K library. 
 	- Sets the value of the specified virtual register.
 
 - `void s3k_sync(void)`
-	- Releases the process and yields to the scheduler. Use to voluntarily yield CPU time.
+	- Reloads the current process's PMP from its saved configuration without voluntarily yielding or changing its execution timeout.
+	- Acts as a compiler memory barrier, so accesses are not moved across the permission change.
 
 - `void s3k_sleep_until(s3k_time_t time)`
 	- Puts the process to sleep until the specified absolute time (in system ticks).
+	- `time == 0` yields until the current execution deadline without requesting a PMP reload.
 
 ---
 
 ## Capability Management
+
+The typed functions remain available as wrappers around four shared syscalls:
+
+- `int s3k_cap_introspect(s3k_capty_t type, s3k_index_t i, s3k_fuel_t offset, void *cap)`
+- `int s3k_cap_revoke(s3k_capty_t type, s3k_index_t i)`
+- `int s3k_cap_delete(s3k_capty_t type, s3k_index_t i)`
+- `int s3k_mon_cap_introspect(s3k_index_t i, s3k_capty_t type, s3k_index_t j, s3k_fuel_t offset, void *cap)`
+
+These accept MEM, TSL, MON, and IPC capability types; NONE and unknown types return an invalid-argument error. Introspection requires an output object matching the selected type and writes it only on success: one machine word for MON, two for the other types. Monitor introspection requires access to both the monitor and the target capability. Revocation retains the capability-specific cleanup and partial-progress behavior. These syscall consolidations change syscall numbering; rebuild applications with the matching library headers.
+
+Derivation also uses two shared syscalls, with the existing typed wrappers unchanged:
+
+- `int s3k_cap_derive(s3k_capty_t type, s3k_index_t i, s3k_fuel_t csize, s3k_word_t option0, s3k_word_t option1, s3k_word_t option2)`
+- `int s3k_mon_cap_derive(s3k_index_t i, s3k_capty_t type, s3k_index_t j, s3k_fuel_t csize, s3k_word_t option0, s3k_word_t option1, s3k_word_t option2)`
+
+Options are `(perm, base, size)` for MEM, `(enabled, size, 0)` for TSL, `(0, 0, 0)` for MON, and `(mode, flag, 0)` for IPC. Local derivation gives the child to the caller; monitor derivation requires a monitor owned by the caller and gives the child to the monitored process. The parent must belong to the caller in both cases. Unsupported types return an invalid-argument error. Capability-specific validation and child-index return values are unchanged.
 
 ### Memory Capabilities
 
@@ -33,14 +51,20 @@ This document describes the S3K system call API as provided by the S3K library. 
 	- Derive a new memory capability from index `i` with the given permissions and address range.
 - `int s3k_mem_revoke(s3k_index_t i)`
 	- Revoke all children derived from the memory capability at index `i`.
+	- May return the number of remaining capability slots when interrupted by the timer or kernel-lock contention. Revocation of another running process's PMP is lazy and does not interrupt that process.
 - `int s3k_mem_delete(s3k_index_t i)`
 	- Delete the memory capability at index `i`.
 - `int s3k_mem_pmp_get(s3k_index_t i, s3k_pmp_slot_t *slot, s3k_mem_perm_t *perm, s3k_pmp_addr_t *addr)`
 	- Get the PMP (Physical Memory Protection) configuration for the memory capability at index `i`.
 - `int s3k_mem_pmp_set(s3k_index_t i, s3k_pmp_slot_t slot, s3k_mem_perm_t perm, s3k_pmp_addr_t addr)`
-	- Set the PMP configuration for the memory capability at index `i`.
+	- Update the saved PMP configuration for the memory capability at index `i`; this does not reload the hardware.
+	- Slot `0` disables its existing saved mapping, ignoring `perm` and `addr`, even when another hart has acquired the process. Repeated clears succeed.
+	- On RV64, the library packs `perm` into the upper 8 bits of the syscall argument; `addr` supplies the lower 56 bits of the NAPOT-encoded PMP address.
 - `int s3k_mem_pmp_clear(s3k_index_t i)`
-	- Clear the PMP configuration for the memory capability at index `i`.
+	- Disable the saved PMP configuration for the memory capability at index `i`; this does not reload the hardware.
+	- Wrapper around `s3k_mem_pmp_set(i, 0, 0, 0)`; monitor clear likewise wraps monitor set with slot `0`. The separate clear syscall numbers are removed; rebuild applications with matching headers.
+
+PMP programming of another process requires that it is not acquired; otherwise the kernel returns an invalid-state error. Disabling an entry is permitted while its process is acquired and leaves its saved address unchanged. PMP changes, including those caused by revocation, deletion, grants, or IPC capability transfers, take effect only at scheduling, a process switch, or an explicit `s3k_sync()`. Call `s3k_sync()` before accessing newly mapped memory.
 
 ### Time Slice Capabilities
 
@@ -50,6 +74,7 @@ This document describes the S3K system call API as provided by the S3K library. 
 	- Derive a new time slice capability from index `i`.
 - `int s3k_tsl_revoke(s3k_index_t i)`
 	- Revoke all children derived from the time slice capability at index `i`.
+	- Revocation can stop for timer expiry or kernel-lock contention; reclaimed frame starts are removed before the kernel lock is released.
 - `int s3k_tsl_delete(s3k_index_t i)`
 	- Delete the time slice capability at index `i`.
 - `int s3k_tsl_set(s3k_index_t i, bool enabled)`
@@ -105,6 +130,11 @@ These functions allow a monitor to operate on another process's capabilities. Th
 	- Get a monitor capability from another process.
 - `int s3k_mon_ipc_get(s3k_index_t i, s3k_index_t j, s3k_cap_ipc_t *cap)`
 	- Get an IPC capability from another process.
+- `int s3k_mon_grant(s3k_index_t i, s3k_capty_t type, s3k_index_t j)`
+	- Grant capability `j` of `type` to the process monitored by `i`.
+	- Accepts `S3K_CAPTY_MEM`, `S3K_CAPTY_TSL`, `S3K_CAPTY_MON`, and `S3K_CAPTY_IPC`; other types return an invalid-argument error.
+	- The typed grant functions below are wrappers around this single syscall.
+	- This replaces the four grant syscall numbers; applications must be rebuilt with the matching library headers.
 - `int s3k_mon_mem_grant(s3k_index_t i, s3k_index_t j)`
 	- Grant a memory capability to another process.
 - `int s3k_mon_tsl_grant(s3k_index_t i, s3k_index_t j)`

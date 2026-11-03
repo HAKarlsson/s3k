@@ -110,19 +110,22 @@ int ipc_delete(pid_t owner, index_t i);
  * @param data The data to send.
  * @param capty The type of capability to send.
  * @param j The index of the capability to send.
- * @param next Pointer to store the next process to run.
- * @return ERR_SUCCESS on success, or an error code on failure.
+ * @param status Receives the syscall result before releasing the caller.
+ * @return The positive PCB address to resume, or its negative on a handoff.
+ * @note Requires the kernel lock and the caller to be current and acquired.
  */
-int ipc_send(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, proc_t **next);
+proc_result_t ipc_send(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, word_t *status);
 
 /**
  * @brief Receives data and a capability from another process.
  * @param owner The owner of the IPC capability.
  * @param i The index of the IPC capability.
- * @param next Pointer to store the next process to run.
- * @return ERR_SUCCESS on success, or an error code on failure.
+ * @param servtime Minimum service time for a yielding sender.
+ * @param status Receives the syscall result before releasing the caller.
+ * @return Zero after blocking and releasing the caller, or its positive PCB address on error.
+ * @note Requires the kernel lock and the caller to be current and acquired.
  */
-int ipc_recv(pid_t owner, index_t i, proc_t **next, uint32_t servtime);
+proc_result_t ipc_recv(pid_t owner, index_t i, uint32_t servtime, word_t *status);
 
 /**
  * @brief Calls a function in another process and waits for a reply.
@@ -131,10 +134,11 @@ int ipc_recv(pid_t owner, index_t i, proc_t **next, uint32_t servtime);
  * @param data The data to send.
  * @param capty The type of capability to send.
  * @param j The index of the capability to send.
- * @param next Pointer to store the next process to run.
- * @return ERR_SUCCESS on success, or an error code on failure.
+ * @param status Receives the syscall result before releasing the caller.
+ * @return A negative receiver address for handoff, zero when blocked, or the positive caller address on error.
+ * @note Requires the kernel lock and the caller to be current and acquired.
  */
-int ipc_call(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, proc_t **next);
+proc_result_t ipc_call(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, word_t *status);
 
 /**
  * @brief Replies to a received message and sends a capability.
@@ -143,10 +147,11 @@ int ipc_call(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, p
  * @param data The data to send in the reply.
  * @param capty The type of capability to send.
  * @param j The index of the capability to send.
- * @param next Pointer to store the next process to run.
- * @return ERR_SUCCESS on success, or an error code on failure.
+ * @param status Receives the syscall result before releasing the caller.
+ * @return The positive PCB address to resume, or its negative on a handoff.
+ * @note Requires the kernel lock and the caller to be current and acquired.
  */
-int ipc_reply(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, proc_t **next);
+proc_result_t ipc_reply(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, word_t *status);
 
 /**
  * @brief Replies to a received message and immediately receives another message.
@@ -155,10 +160,12 @@ int ipc_reply(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, 
  * @param data The data to send in the reply.
  * @param capty The type of capability to send.
  * @param j The index of the capability to send.
- * @param next Pointer to store the next process to run.
- * @return ERR_SUCCESS on success, or an error code on failure.
+ * @param servtime Minimum service time for the next yielding sender.
+ * @param status Receives the syscall result before releasing the caller.
+ * @return A negative receiver address for handoff, zero when blocked, or the positive caller address on error.
+ * @note Requires the kernel lock and the caller to be current and acquired.
  */
-int ipc_replyrecv(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, proc_t **next, uint32_t servtime);
+proc_result_t ipc_replyrecv(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, uint32_t servtime, word_t *status);
 
 /**
  * @brief Asynchronously sends data to another process.
@@ -168,10 +175,11 @@ int ipc_replyrecv(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t
  * @param owner The owner of the IPC capability.
  * @param i The index of the IPC capability.
  * @param data The data to send.
- * @param next Pointer to store the next process to run.
- * @return ERR_SUCCESS on success, or an error code on failure.
+ * @param status Receives the syscall result before releasing the caller.
+ * @return The positive PCB address to resume, or its negative on a handoff.
+ * @note Requires the kernel lock and the caller to be current and acquired.
  */
-int ipc_asend(pid_t owner, index_t i, word_t data, proc_t **next);
+proc_result_t ipc_asend(pid_t owner, index_t i, word_t data, word_t *status);
 
 /**
  * @brief Asynchronously receives data from another process.

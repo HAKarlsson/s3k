@@ -1,6 +1,7 @@
 #include "exception.h"
 
 #include "current.h"
+#include "lock.h"
 
 enum exception_cause {
 	INSTRUCTION_ADDRESS_MISALIGNED = 0,
@@ -52,12 +53,15 @@ proc_t *_handle_delegate(word_t cause, word_t tval)
 	return current;
 }
 
-proc_t *exception_handler(word_t cause, word_t tval)
+proc_result_t exception_handler(word_t cause, word_t tval)
 {
-	// If mret instruction
+	lock_acquire();
+	proc_t *next;
 	if (cause == ILLEGAL_INSTRUCTION && tval == MRET) {
-		return _handle_mret();
+		next = _handle_mret();
+	} else {
+		next = _handle_delegate(cause, tval);
 	}
-	// If not mret instruction
-	return _handle_delegate(cause, tval);
+	lock_release();
+	return proc_resume_result(next);
 }

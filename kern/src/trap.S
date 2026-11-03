@@ -3,7 +3,9 @@
 .extern exception_handler  	// External handler for exceptions.
 .extern interrupt_handler  	// External handler for interrupts.
 .extern syscall_handler    	// External handler for system calls.
-.extern scheduler          	// External function for scheduling processes.
+.extern sched
+.extern sched_yield
+.extern sched_wait
 
 .globl trap_entry  		// Make trap_entry globally accessible.
 .globl trap_exit   		// Make trap_exit globally accessible.
@@ -11,6 +13,8 @@
 .type  trap_entry, @function
 .type  trap_exit, @function
 .type  trap_resume, @function
+.globl trap_post
+.type trap_post, @function
 
 .section .text
 
@@ -72,7 +76,7 @@ trap_entry:
 
 _trap_dispatch:
 	// Prepare for trap dispatch.
-	la	ra,_trap_switch		// Set return address to trap_switch.
+	la	ra,trap_post
 
 	// Determine the type of trap and dispatch to the appropriate handler.
 	csrr	a0,mcause		// Load the trap cause.
@@ -80,27 +84,25 @@ _trap_dispatch:
 	beq	a0,t0,syscall_handler	// If system call, jump to syscall_handler.
 
 	csrr	a1,mtval		// Load trap value for exception handling.
+	li	t0,0x8000000000000007
+	beq	a0,t0,sched_yield
 	bltz	a0,interrupt_handler	// If negative, it's an interrupt; jump to interrupt_handler.
 	j	exception_handler	// Otherwise, jump to exception_handler.
 
-_trap_switch:
-	// Check if a context switch is needed.
-	// If the current process (a0) is the same as the next process (tp),
-	// jump directly to `trap_exit` without performing a context switch.
-	beq	a0,tp,trap_resume
+trap_post:
+	beqz	a0,_trap_wait
+	bltz	a0,trap_resume
+	mv	tp,a0
+	j	trap_exit
 
-	// Atomically update the process state to indicate it is no longer running.
-	// This ensures that the process state is updated safely in a multi-core environment.
-	li	t0,~1				// Load the bitmask to clear the "busy" state.
-	amoand.d.rl x0,t0,(tp)
-
-	// If the next process (a0) is NULL, jump to `sched`.
-	bnez	a0,trap_resume
-
+_trap_wait:
+	call	sched_wait
 	call	sched
+	j	trap_post
 
 trap_resume:
-	mv	tp,a0
+	// Recover the PCB address from the negative reload result.
+	neg	tp,a0
 
 	LREG	s0,PROC_PMPCFG0(tp)	// Load PMP configuration.
 	csrw	pmpcfg0,s0		// Write PMP configuration to pmpcfg0.

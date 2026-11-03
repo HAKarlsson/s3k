@@ -39,11 +39,12 @@ void kernel_init(void)
 	lock_init();
 	proc_init(RAM_BASE);
 
-	mem_pmp_set((pid_t)1, (index_t)0, (pmp_slot_t)1, RAM_PERM, pmp_napot_encode(RAM_BASE, RAM_SIZE));
-	mem_pmp_set((pid_t)1, (index_t)MAX_MEMORY_FUEL, (pmp_slot_t)2, UART_PERM,
-		    pmp_napot_encode(UART_BASE, UART_SIZE));
-	mem_pmp_set((pid_t)1, (index_t)2 * MAX_MEMORY_FUEL, (pmp_slot_t)3, SPM_PERM,
-		    pmp_napot_encode(SPM_BASE, SPM_SIZE));
+	mem_pmp_set((pid_t)1, (index_t)0, (pmp_slot_t)1,
+		    ((word_t)RAM_PERM << 56) | pmp_napot_encode(RAM_BASE, RAM_SIZE));
+	mem_pmp_set((pid_t)1, (index_t)MAX_MEMORY_FUEL, (pmp_slot_t)2,
+		    ((word_t)UART_PERM << 56) | pmp_napot_encode(UART_BASE, UART_SIZE));
+	mem_pmp_set((pid_t)1, (index_t)2 * MAX_MEMORY_FUEL, (pmp_slot_t)3,
+		    ((word_t)SPM_PERM << 56) | pmp_napot_encode(SPM_BASE, SPM_SIZE));
 }
 
 void temporal_fence(void)

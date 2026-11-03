@@ -1,5 +1,6 @@
 #include "ipc.h"
 
+#include "cap.h"
 #include "current.h"
 #include "macro.h"
 #include "mem.h"
@@ -39,7 +40,7 @@ bool ipc_valid_access(pid_t owner, index_t i)
 static bool _valid_derivation(ipc_t *cap, fuel_t csize, ipc_mode_t mode, ipc_flag_t flag)
 {
 	// Check if sufficient cfree is available.
-	if (csize >= cap->cfree && csize > 0) {
+	if (csize == 0 || csize >= cap->cfree) {
 		return false;
 	}
 
@@ -172,7 +173,7 @@ int ipc_revoke(pid_t owner, index_t i)
 		ipc_table[i].mode = IPC_MODE_REVOKE;
 
 		// Check for preemption.
-		if (UNLIKELY(preempt()))
+		if (UNLIKELY(revoke_preempt()))
 			break;
 	}
 
@@ -216,23 +217,8 @@ static void do_send(pid_t receiver, word_t data[2], pid_t owner, capty_t capty, 
 	// Copy capability information.
 	proc->regs.a3 = capty;
 	proc->regs.a4 = (capty == CAPTY_NONE) ? 0 : i;
-	switch (capty) {
-	case CAPTY_NONE:
-		break;
-	case CAPTY_MEM:
-		mem_transfer(owner, i, receiver);
-		break;
-	case CAPTY_TSL:
-		tsl_transfer(owner, i, receiver);
-		break;
-	case CAPTY_MON:
-		mon_transfer(owner, i, receiver);
-		break;
-	case CAPTY_IPC:
-		ipc_transfer(owner, i, receiver);
-		break;
-	default:
-		__builtin_unreachable();
+	if (capty != CAPTY_NONE) {
+		cap_transfer(owner, capty, i, receiver);
 	}
 }
 
@@ -253,242 +239,159 @@ static bool _ipc_invoke_valid_access(pid_t owner, index_t i, ipc_mode_t mode, bo
 	return sink ? (ipc_table[i].sink == i) : (ipc_table[i].sink != i);
 }
 
-/**
- * Send data and potentially a capability to the receiver.
- * For synchronous unidirectional IPC only!
- */
-int ipc_send(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, proc_t **next)
+static proc_result_t ipc_deliver(pid_t owner, proc_t *receiver, bool yield, bool block, word_t *status, int result)
 {
-	if (UNLIKELY(!_ipc_invoke_valid_access(owner, i, IPC_MODE_USYNC, false))) {
+	*status = result;
+	if (yield) {
+		receiver->timeout = current->timeout;
+		proc_release(owner);
+		return proc_reload_result(receiver);
+	}
+	receiver->timeout = 0;
+	proc_release(receiver->pid);
+	if (block) {
+		current->timeout = UINT64_MAX;
+		proc_release(owner);
+		return 0;
+	}
+	return proc_resume_result(current);
+}
+
+static int ipc_validate_message(pid_t owner, index_t i, capty_t capty, index_t j, ipc_mode_t mode, bool sink)
+{
+	if (!_ipc_invoke_valid_access(owner, i, mode, sink)) {
 		return ERR_INVALID_ACCESS;
 	}
-	if (UNLIKELY(!_valid_capability_send(owner, j, capty, ipc_table[i].flag))) {
+	if (!_valid_capability_send(owner, j, capty, ipc_table[i].flag)) {
 		return ERR_INVALID_ARGUMENT;
 	}
+	return ERR_SUCCESS;
+}
 
-	// Get the sink capability.
+static proc_result_t ipc_request(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j,
+				word_t *status, ipc_mode_t mode)
+{
+	*status = ipc_validate_message(owner, i, capty, j, mode, false);
+	if (*status != ERR_SUCCESS) {
+		return proc_resume_result(current);
+	}
 	index_t sink = ipc_table[i].sink;
-
-	// Get the receiver process.
 	pid_t receiver = ipc_table[sink].owner;
 	if (receiver == INVALID_PID) {
-		return ERR_INVALID_STATE;
+		*status = ERR_INVALID_STATE;
+		return proc_resume_result(current);
 	}
-
-	uint32_t servtime = ipc_table[sink].opt;
-	bool is_yield = (ipc_table[i].flag & IPC_FLAG_YIELD) != 0;
-
-	if (is_yield) {
-		// Update the timeout for the call.
-		uint64_t curr_time = rtc_get_time();
-		uint64_t timeout = current->timeout;
-		if (curr_time + ((uint64_t)servtime) * TICKS_PER_US >= timeout) {
-			// If the service time exceeds the current timeout, return timeout error.
-			return ERR_INVALID_STATE;
-		}
+	bool call = mode == IPC_MODE_BSYNC;
+	ipc_flag_t flags = ipc_table[call ? sink : i].flag;
+	if ((flags & IPC_FLAG_YIELD)
+	    && rtc_get_time() + (uint64_t)ipc_table[sink].opt * TICKS_PER_US >= current->timeout) {
+		*status = ERR_INVALID_STATE;
+		return proc_resume_result(current);
 	}
-
-	// Check if the receiver is ready.
 	if (!proc_ipc_acquire(receiver, sink)) {
-		return ERR_INVALID_STATE;
+		*status = ERR_INVALID_STATE;
+		return proc_resume_result(current);
 	}
-
-	// Send the data to the target process.
 	do_send(receiver, data, owner, capty, j);
 	ipc_table[sink].source = i;
-
-	proc_t *sender = *next;
-	if (ipc_table[i].flag & IPC_FLAG_YIELD) {
-		// If yielding IPC, set the next process to the receiver.
-		*next = proc_get(receiver);
-		// Receiver inherits the sender's timeout.
-		(*next)->timeout = sender->timeout;
-	} else {
-		// If not yielding IPC, release the receiver.
-		proc_release(receiver);
+	if (call) {
+		ipc_table[sink].opt = 0;
+		proc_ipc_block(owner, i);
 	}
-	return ERR_SUCCESS;
+	return ipc_deliver(owner, proc_get(receiver), ipc_table[i].flag & IPC_FLAG_YIELD,
+			   call, status, call ? ERR_TIMEOUT : ERR_SUCCESS);
+}
+
+proc_result_t ipc_send(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, word_t *status)
+{
+	return ipc_request(owner, i, data, capty, j, status, IPC_MODE_USYNC);
 }
 
 /**
  * Receive data and potentially a capability from the sender.
  * For synchronous IPC only!
  */
-int ipc_recv(pid_t owner, index_t i, proc_t **next, uint32_t servtime)
+proc_result_t ipc_recv(pid_t owner, index_t i, uint32_t servtime, word_t *status)
 {
 	if (!_ipc_invoke_valid_access(owner, i, IPC_MODE_USYNC, true)
 	    && !_ipc_invoke_valid_access(owner, i, IPC_MODE_BSYNC, true)) {
-		return ERR_INVALID_ACCESS;
+		*status = ERR_INVALID_ACCESS;
+		return proc_resume_result(current);
 	}
 	// Go to a receiver state.
 	proc_ipc_block(owner, i);
 	ipc_table[i].source = i;
 	ipc_table[i].opt = servtime;
 
-	(*next)->timeout = UINT64_MAX;
-	*next = NULL;
-	return ERR_SUCCESS;
+	current->timeout = UINT64_MAX;
+	*status = ERR_SUCCESS;
+	proc_release(owner);
+	return 0;
 }
 
-/**
- * Send a synchronous IPC call to the receiver.
- */
-int ipc_call(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, proc_t **next)
+proc_result_t ipc_call(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, word_t *status)
 {
-	if (!_ipc_invoke_valid_access(owner, i, IPC_MODE_BSYNC, false)) {
-		return ERR_INVALID_ACCESS;
-	}
-	if (!_valid_capability_send(owner, j, capty, ipc_table[i].flag)) {
-		return ERR_INVALID_ARGUMENT;
-	}
-	// Get the sink capability and receiver process.
-	index_t sink = ipc_table[i].sink;
-	pid_t receiver = ipc_table[sink].owner;
-
-	if (receiver == INVALID_PID) {
-		return ERR_INVALID_STATE;
-	}
-
-	uint32_t servtime = ipc_table[sink].opt;
-	bool is_yield = (ipc_table[sink].flag & IPC_FLAG_YIELD) != 0;
-
-	if (is_yield) {
-		// Update the timeout for the call.
-		uint64_t curr_time = rtc_get_time();
-		uint64_t timeout = current->timeout;
-		if (curr_time + ((uint64_t)servtime) * TICKS_PER_US >= timeout) {
-			// If the service time exceeds the current timeout, return timeout error.
-			return ERR_INVALID_STATE;
-		}
-	}
-
-	// If receiver is invalid or not ready, return invalid state error.
-	if (!proc_ipc_acquire(receiver, sink)) {
-		return ERR_INVALID_STATE;
-	}
-
-	// Perform the send operation.
-	do_send(receiver, data, owner, capty, j);
-
-	// Set the receiver's source capability.
-	ipc_table[sink].source = i;
-	ipc_table[sink].opt = 0;
-
-	// Wait for reply.
-	proc_ipc_block(owner, i);
-
-	proc_t *sender = *next;
-	if (ipc_table[i].flag & IPC_FLAG_YIELD) {
-		// If yielding IPC, set the next process to the receiver.
-		*next = proc_get(receiver);
-		// Receiver inherits the sender's timeout.
-		(*next)->timeout = sender->timeout;
-	} else {
-		// Release the receiver.
-		proc_release(receiver);
-		sender->timeout = UINT64_MAX;
-	}
-	return ERR_TIMEOUT;
+	return ipc_request(owner, i, data, capty, j, status, IPC_MODE_BSYNC);
 }
 
-/**
- * Reply to a synchronous IPC call.
- */
-int ipc_reply(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, proc_t **next)
+static proc_result_t ipc_respond(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j,
+				word_t *status, bool receive, uint32_t servtime)
 {
-	if (!_ipc_invoke_valid_access(owner, i, IPC_MODE_BSYNC, true)) {
-		return ERR_INVALID_ACCESS;
+	*status = ipc_validate_message(owner, i, capty, j, IPC_MODE_BSYNC, true);
+	if (*status != ERR_SUCCESS) {
+		return proc_resume_result(current);
 	}
-	if (!_valid_capability_send(owner, j, capty, ipc_table[i].flag)) {
-		return ERR_INVALID_ARGUMENT;
-	}
-	// Get the source capability and client process.
 	index_t source = ipc_table[i].source;
-	pid_t receiver_pid = ipc_table[source].owner;
-
-	// Check if the client is valid and ready.
-	if ((source == i) || (receiver_pid == INVALID_PID) || !proc_ipc_acquire(receiver_pid, source)) {
-		return ERR_INVALID_STATE;
+	pid_t receiver = ipc_table[source].owner;
+	proc_t *next = NULL;
+	if (source != i && receiver != INVALID_PID && proc_ipc_acquire(receiver, source)) {
+		do_send(receiver, data, owner, capty, j);
+		ipc_table[i].source = i;
+		next = proc_get(receiver);
+	} else if (!receive) {
+		*status = ERR_INVALID_STATE;
+		return proc_resume_result(current);
 	}
 
-	// Send the operation.
-	do_send(receiver_pid, data, owner, capty, j);
-	ipc_table[i].source = i; // Clear the source capability.
-
-	proc_t *sender = *next;
-	proc_t *receiver = proc_get(receiver_pid);
-
-	if (ipc_table[i].flag & IPC_FLAG_YIELD) {
-		// If yielding IPC, set the next process to the receiver.
-		*next = receiver;
-		// The receiver inherits the timeout.
-		receiver->timeout = sender->timeout;
-	} else {
-		// If not yielding IPC, release the receiver.
-		// Set timeout to 0 so it can be scheduled as soon as possible.
-		proc_release(receiver_pid);
-		receiver->timeout = 0;
+	if (!receive) {
+		return ipc_deliver(owner, next, ipc_table[i].flag & IPC_FLAG_YIELD, false, status, ERR_SUCCESS);
 	}
-	return ERR_SUCCESS;
-}
-
-/**
- * Reply and receive in a single IPC operation.
- */
-int ipc_replyrecv(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, proc_t **next, uint32_t servtime)
-{
-	if (!_ipc_invoke_valid_access(owner, i, IPC_MODE_BSYNC, true)) {
-		return ERR_INVALID_ACCESS;
-	}
-
-	if (!_valid_capability_send(owner, j, capty, ipc_table[i].flag)) {
-		return ERR_INVALID_ARGUMENT;
-	}
-
-	proc_t *sender = *next;
-
-	// Set next to null by default.
-	*next = NULL;
-
-	// Get the source and sink capabilities.
-	index_t source = ipc_table[i].source;
-	pid_t recv_pid = ipc_table[source].owner;
-
-	if ((source != i) && (recv_pid != INVALID_PID) && proc_ipc_acquire(recv_pid, source)) {
-		// Do send operation.
-		do_send(recv_pid, data, owner, capty, j);
-		ipc_table[i].source = i; // Clear the source capability.
-
-		proc_t *receiver = proc_get(recv_pid);
-
+	// Donate the old deadline before blocking the server indefinitely.
+	if (next != NULL) {
 		if (ipc_table[i].flag & IPC_FLAG_YIELD) {
-			// If yielding IPC, set the next process to the receiver.
-			*next = receiver;
-			// Receiver inherits the sender's timeout.
-			receiver->timeout = sender->timeout;
+			next->timeout = current->timeout;
 		} else {
-			// If not yielding IPC, release the receiver.
-			proc_release(recv_pid);
-			// Set timeout to 0 so it can be scheduled as soon as possible.
-			receiver->timeout = 0;
+			next->timeout = 0;
+			proc_release(receiver);
+			next = NULL;
 		}
 	}
-
-	// Perform receive operation.
 	proc_ipc_block(owner, i);
-	ipc_table[i].opt = servtime; // Store service time in opt field.
-	sender->timeout = UINT64_MAX;
+	ipc_table[i].opt = servtime;
+	current->timeout = UINT64_MAX;
+	*status = ERR_SUCCESS;
+	proc_release(owner);
+	return next == NULL ? 0 : proc_reload_result(next);
+}
 
-	return ERR_SUCCESS;
+proc_result_t ipc_reply(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, word_t *status)
+{
+	return ipc_respond(owner, i, data, capty, j, status, false, 0);
+}
+
+proc_result_t ipc_replyrecv(pid_t owner, index_t i, word_t data[2], capty_t capty, index_t j, uint32_t servtime, word_t *status)
+{
+	return ipc_respond(owner, i, data, capty, j, status, true, servtime);
 }
 
 /**
  * Asynchronously send data.
  */
-int ipc_asend(pid_t owner, index_t i, word_t data, proc_t **next)
+proc_result_t ipc_asend(pid_t owner, index_t i, word_t data, word_t *status)
 {
 	if (!_ipc_invoke_valid_access(owner, i, IPC_MODE_ASYNC, false)) {
-		return ERR_INVALID_ACCESS;
+		*status = ERR_INVALID_ACCESS;
+		return proc_resume_result(current);
 	}
 
 	index_t sink = ipc_table[i].sink;
@@ -498,13 +401,14 @@ int ipc_asend(pid_t owner, index_t i, word_t data, proc_t **next)
 	ipc_table[sink].source = i;
 	ipc_table[sink].opt = data;
 
+	*status = ERR_SUCCESS;
 	if ((ipc_table[i].flag & IPC_FLAG_YIELD) && recv_pid != INVALID_PID && proc_acquire(recv_pid)) {
-		proc_t *sender = *next;
 		proc_t *receiver = proc_get(recv_pid);
-		*next = receiver;
-		receiver->timeout = sender->timeout;
+		receiver->timeout = current->timeout;
+		proc_release(owner);
+		return proc_reload_result(receiver);
 	}
-	return ERR_SUCCESS;
+	return proc_resume_result(current);
 }
 
 /**

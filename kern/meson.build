@@ -2,6 +2,7 @@
 subdir('platform')
 
 sources = files(
+    'src/cap.c',
     'src/head.S',
     'src/trap.S',
     'src/exception.c',
@@ -15,7 +16,6 @@ sources = files(
     'src/sched.c',
     'src/syscall.c',
     'src/tsl.c',
-    'src/ttas.c',
 )
 
 incdir = include_directories('include')

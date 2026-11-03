@@ -10,7 +10,7 @@
  * registers, PMP configuration, and process ID.
  */
 typedef struct proc {
-	word_t state; ///< Process state.
+	word_t state; ///< Accessed under the kernel lock.
 
 	struct {
 		word_t pc, ra, sp, gp, tp;				 ///< Special registers.
@@ -33,6 +33,20 @@ typedef struct proc {
 	uint64_t timeout; ///< Timeout for the process, used for scheduling.
 	word_t pid;	  ///< Process ID.
 } __attribute__((aligned(sizeof(word_t)))) proc_t;
+
+// Zero waits; positive resumes; negative reloads PMP before resuming.
+typedef intptr_t proc_result_t;
+
+// PCB addresses on supported platforms are nonzero and at most INTPTR_MAX.
+static inline proc_result_t proc_resume_result(proc_t *proc)
+{
+	return (proc_result_t)(uintptr_t)proc;
+}
+
+static inline proc_result_t proc_reload_result(proc_t *proc)
+{
+	return (proc_result_t)((uintptr_t)0 - (uintptr_t)proc);
+}
 
 typedef enum {
 	VREG_TPC = 0,
@@ -151,7 +165,7 @@ void proc_pmp_get(pid_t pid, pmp_slot_t slot, mem_perm_t *rwx, pmp_addr_t *addr)
  *
  * @param pid The process ID of the process to acquire.
  * @return `true` if the process was successfully acquired, `false` otherwise.
- * @note This function should be called before executing a process to ensure exclusive access.
+ * @note State transitions and inspection require the kernel lock.
  * @note The function asserts that the PID is valid and within bounds.
  */
 bool proc_acquire(pid_t pid);

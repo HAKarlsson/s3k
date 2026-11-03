@@ -1,5 +1,6 @@
 #include "mem.h"
 
+#include "current.h"
 #include "macro.h"
 #include "pmp.h"
 #include "preempt.h"
@@ -159,7 +160,7 @@ int mem_revoke(pid_t owner, index_t i)
 		// Reclaim the child's capability table.
 		mem_table[i].cfree += mem_table[j].cfree;
 
-		if (UNLIKELY(preempt()))
+		if (UNLIKELY(revoke_preempt()))
 			break;
 	}
 
@@ -197,8 +198,20 @@ int mem_pmp_set(pid_t owner, index_t i, pmp_slot_t slot, word_t pmpconf)
 		return ERR_INVALID_ACCESS;
 	}
 
-    word_t rwx = (pmpconf >> 56) & 0xFF;
-    word_t addr = pmpconf & 0xFFFFFFFFFFFFFF;
+	proc_t *proc = proc_get(owner);
+	if (slot == 0) {
+		if (mem_table[i].slot != 0) {
+			proc_pmp_clear(owner, mem_table[i].slot - 1);
+			mem_table[i].slot = 0;
+		}
+		return ERR_SUCCESS;
+	}
+	if ((proc->state & PROC_STATE_ACQUIRED) && proc != current) {
+		return ERR_INVALID_STATE;
+	}
+
+	word_t rwx = (pmpconf >> 56) & 0xFF;
+	word_t addr = pmpconf & 0xFFFFFFFFFFFFFF;
 
 	// Validate PMP arguments.
 	if (UNLIKELY(!_valid_pmp_args(mem_table[i], slot, rwx, addr))) {
@@ -242,24 +255,6 @@ int mem_pmp_get(pid_t owner, index_t i, pmp_slot_t *slot, mem_perm_t *rwx, pmp_a
 	// Retrieve the PMP configuration.
 	*slot = mem_table[i].slot;
 	proc_pmp_get(owner, mem_table[i].slot - 1, rwx, addr);
-
-	return ERR_SUCCESS;
-}
-
-/**
- * Disables a memory capability by clearing the PMP slot.
- */
-int mem_pmp_clear(pid_t owner, index_t i)
-{
-	if (UNLIKELY(!mem_valid_access(owner, i))) {
-		return ERR_INVALID_ACCESS;
-	}
-
-	// Clear the PMP slot if it is set.
-	if (mem_table[i].slot != 0) {
-		proc_pmp_clear(owner, mem_table[i].slot - 1);
-		mem_table[i].slot = 0;
-	}
 
 	return ERR_SUCCESS;
 }

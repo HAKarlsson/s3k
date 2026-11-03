@@ -8,9 +8,8 @@ void sched_init(void);
 /**
  * @brief Reclaims a range of scheduling slots for a specific process.
  *
- * Updates the scheduling table to assign the specified range of slots
- * to the given process. If the current slot falls within the reclaimed
- * range, it updates the current slot to the start of the range.
+ * Replaces the range with one frame after the caller has cleared obsolete
+ * child entries. The caller holds the kernel lock.
  *
  * @param hart The hardware thread ID (hart) to reclaim slots for.
  * @param pid The process ID to assign the slots to.
@@ -20,11 +19,16 @@ void sched_init(void);
 void sched_reclaim(hart_t hart, pid_t pid, time_slot_t begin, time_slot_t end);
 
 /**
+ * Clears a revoked frame start while holding the kernel lock.
+ */
+void sched_clear(hart_t hart, time_slot_t begin);
+
+/**
  * @brief Splits a scheduling slot into two parts.
  *
  * Divides a slot into two segments, assigning the first segment to the
  * original process and creating a new slot for the second segment.
- * Adjusts the current slot if it falls within the second segment.
+ * The caller holds the kernel lock.
  *
  * @param hart The hardware thread ID (hart) to split the slot for.
  * @param pid The process ID of the slot to split.
@@ -47,10 +51,17 @@ void sched_split(hart_t hart, pid_t pid, time_slot_t begin, time_slot_t mid, tim
 void sched_set_pid(hart_t hart, pid_t pid, time_slot_t begin);
 
 /**
- * @brief Main scheduler function to determine the next process to run.
- *
- * Continuously retrieves the next process until a valid process is found.
- *
- * @return A pointer to the next process to run.
+ * Looks up the current frame start once and programs the local timer.
+ * Returns zero or the negative address of an acquired PCB to reload PMP.
  */
-proc_t *sched(void);
+proc_result_t sched(void);
+
+/**
+ * Releases the interrupted process under the kernel lock and returns zero.
+ */
+proc_result_t sched_yield(void);
+
+/**
+ * Performs the temporal fence and waits for the programmed timer deadline.
+ */
+void sched_wait(void);

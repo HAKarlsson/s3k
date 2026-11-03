@@ -9,6 +9,16 @@ Trusted user processes can dynamically create and destroy partitions. Time is a 
 
 Using the temporal fence instruction (see [PULP's CVA6 implementation](https://github.com/pulp-platform/cva6)), S3K provides time protection between partitions, reducing covert channels from core-local microarchitectural state. To mitigate off-core channels, pair S3K with hardware or platform measures such as cache partitioning, scratchpad/SRAM usage, or flushing shared resources on partition switches.
 
+On multicore RV64 configurations, secondary harts acquire the boot-ready flag after hart 0 publishes initialized kernel state with release ordering. A FIFO ticket lock serializes handlers, scheduler decisions, and process-state transitions. Once a hart has taken a ticket it waits for its turn, even if its timer expires. Revocation returns partial progress when the timer expires or another hart is queued.
+
+The scheduler performs one lookup at the current time-slot index, without tracking or traversing earlier frames. Only frame starts contain runnable entries: missing a frame's start means waiting for a later frame start. Empty entries and unavailable processes advance the local timer to the next elementary slot boundary. A voluntary yield releases the process and waits for the already-programmed timer deadline.
+
+Trap handlers return a signed `proc_result_t`: zero waits after releasing the outgoing process, a positive PCB address resumes without reloading PMP, and the negative PCB address requests a PMP reload. Supported PCB addresses are nonzero and fit in the positive range of `intptr_t`. IPC and monitor operations complete their own handoffs: they save the syscall result before releasing the caller and return the final process result. Their syscall handlers only marshal arguments; the dispatcher passes results through unchanged. Only scheduling, process handoffs, and explicit `s3k_sync()` calls request a reload. The post-handler tests the sign and negates a reload result to recover the PCB address, then performs PMP programming and context restoration outside the lock.
+
+PMP revocation is deliberately lazy: changing saved PMP state, locally or remotely, does not itself reload the hardware. Other harts may disable a running process's PMP entries, but cannot change their addresses or enable entries while it is acquired. Disabled entries retain their saved addresses so an unlocked reload can safely observe older permissions. Call `s3k_sync()` to apply the current process's saved PMP explicitly; this does not voluntarily yield or change its timeout.
+
+Capability grants and IPC share capability-transfer dispatch while retaining separate destination authorization and channel permission checks. Synchronous IPC shares request, response, and delivery mechanics without changing blocking or donation semantics. PMP syscall handlers call the memory operations directly, with monitor authorization in the monitor handlers.
+
 ## Repository Organization
 
 - `cross/` : Cross-compilation configuration files.
@@ -33,6 +43,12 @@ Requirements: Docker (rootless).
 ./scripts/docker.sh
 meson setup builddir --cross-file=cross/rv64imac.ini
 ninja -C builddir
+```
+
+The multicore regression checks cover ticket ordering, locked process-state transitions, direct schedule lookup, partial revocation, lazy PMP updates, and trap return values. They require `riscv64-linux-gnu-gcc` with its libc development headers and `qemu-riscv64`:
+
+```bash
+sh tests/run-multicore.sh
 ```
 
 ## Compilation instructions for hello project

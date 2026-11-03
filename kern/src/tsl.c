@@ -136,6 +136,11 @@ int tsl_revoke(pid_t owner, index_t i)
 	while (tsl_table[i].cfree < tsl_table[i].csize) {
 		index_t j = i + tsl_table[i].cfree;
 
+		// A fully delegated child shares its start with a surviving descendant.
+		if (tsl_table[j].free > 0) {
+			sched_clear(tsl_table[j].hart, tsl_table[j].base);
+		}
+
 		// Reclaim cfree and allocation.
 		tsl_table[i].cfree += tsl_table[j].cfree;
 		tsl_table[i].free += tsl_table[j].free;
@@ -143,7 +148,7 @@ int tsl_revoke(pid_t owner, index_t i)
 		// Invalidate the child capability.
 		tsl_table[j].owner = INVALID_PID;
 
-		if (UNLIKELY(preempt()))
+		if (UNLIKELY(revoke_preempt()))
 			break;
 	}
 

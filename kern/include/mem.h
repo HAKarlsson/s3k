@@ -108,11 +108,12 @@ int mem_delete(pid_t owner, index_t i);
  *
  * @param owner The process ID of the owner of the memory capability.
  * @param index The index in the memory table of the capability to be enabled.
- * @param slot The PMP slot to be set.
- * @param pmpconf The rwx (8 high bits) and address (56 lower bits).
+ * @param slot The PMP slot to be set, or zero to disable the existing mapping.
+ * @param pmpconf The rwx (8 high bits) and address (56 lower bits); ignored when slot is zero.
  * @return ERR_SUCCESS if the capability is successfully enabled,
  *         ERR_INVALID_ACCESS if the owner does not match the entry in the memory table,
  *         ERR_INVALID_ARGUMENT if the PMP arguments are invalid,
+ *         ERR_INVALID_STATE if another hart has acquired the target process and slot is nonzero,
  *         ERR_SLOT_IN_USE if the PMP slot is already in use.
  */
 int mem_pmp_set(pid_t owner, index_t i, pmp_slot_t slot, word_t pmpconf);
@@ -129,13 +130,3 @@ int mem_pmp_set(pid_t owner, index_t i, pmp_slot_t slot, word_t pmpconf);
  *         ERR_INVALID_ACCESS if the owner does not match the entry in the memory table.
  */
 int mem_pmp_get(pid_t owner, index_t i, pmp_slot_t *slot, mem_perm_t *rwx, pmp_addr_t *addr);
-
-/**
- * Disables a memory capability by clearing its PMP slot.
- *
- * @param owner The process ID of the owner of the memory capability.
- * @param index The index in the memory table of the capability to be disabled.
- * @return ERR_SUCCESS if the capability is successfully disabled,
- *         ERR_INVALID_ACCESS if the owner does not match the entry in the memory table.
- */
-int mem_pmp_clear(pid_t owner, index_t i);

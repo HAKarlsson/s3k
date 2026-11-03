@@ -35,6 +35,12 @@ bool mon_valid_access(pid_t owner, index_t i);
 int mon_transfer(pid_t owner, index_t i, pid_t new_owner);
 
 /**
+ * Grants capability j of the specified type to the process monitored by i.
+ * Requires the kernel lock. NONE and unknown types return ERR_INVALID_ARGUMENT.
+ */
+int mon_grant(pid_t owner, index_t i, capty_t type, index_t j);
+
+/**
  * Retrieves a monitor capability from the monitor table.
  *
  * @param owner The process ID associated with the monitor capability.
@@ -120,13 +126,11 @@ int mon_resume(pid_t owner, index_t i);
  *
  * @param owner The process ID of the owner of the capability.
  * @param index The index in the monitor table of the capability to be yielded.
- * @param next A pointer to store the next process to run.
- *             This is set to the process that is being yielded to.
- * @return ERR_SUCCESS if the time is successfully yielded,
- *         ERR_INVALID_ACCESS if the owner does not match the entry in the monitor table,
- *         ERR_INVALID_STATE if the process is not in a valid state to yield time.
+ * @param status Receives the syscall result before releasing the caller.
+ * @return The negative target PCB address after releasing the caller, or the positive caller address on error.
+ * @note Requires the kernel lock and the caller to be current and acquired.
  */
-int mon_yield(pid_t owner, index_t i, proc_t **next);
+proc_result_t mon_yield(pid_t owner, index_t i, word_t *status);
 
 /**
  * Get the register value for the monitored process.

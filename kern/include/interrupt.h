@@ -7,10 +7,10 @@
  * @brief Handles hardware interrupts.
  *
  * This function is called when a hardware interrupt occurs.
- * It processes the interrupt and returns the updated process control block.
+ * It releases the interrupted process and returns zero to wait for scheduling.
  *
  * @param cause The cause of the interrupt.
  * @param tval The trap value associated with the interrupt.
- * @return The updated process control block.
+ * @return Zero after releasing the interrupted process.
  */
-proc_t *interrupt_handler(word_t cause, word_t tval);
+proc_result_t interrupt_handler(word_t cause, word_t tval);

@@ -51,8 +51,8 @@ pid_t proc_get_pid(const proc_t *p)
  */
 void proc_pmp_set(pid_t pid, pmp_slot_t slot, mem_perm_t rwx, pmp_addr_t addr)
 {
-	_proc(pid)->pmp.cfg[slot] = PMP_MODE_NAPOT | rwx; // Set PMP permissions.
 	_proc(pid)->pmp.addr[slot] = addr;		  // Set PMP address.
+	_proc(pid)->pmp.cfg[slot] = PMP_MODE_NAPOT | rwx; // Set PMP permissions.
 }
 
 /**
@@ -60,8 +60,8 @@ void proc_pmp_set(pid_t pid, pmp_slot_t slot, mem_perm_t rwx, pmp_addr_t addr)
  */
 void proc_pmp_clear(pid_t pid, pmp_slot_t slot)
 {
-	_proc(pid)->pmp.cfg[slot] = 0;	// Clear PMP permissions.
-	_proc(pid)->pmp.addr[slot] = 0; // Clear PMP address.
+	// Addresses must remain stable during another hart's unlocked PMP reload.
+	_proc(pid)->pmp.cfg[slot] = 0;
 }
 
 /**
@@ -69,7 +69,7 @@ void proc_pmp_clear(pid_t pid, pmp_slot_t slot)
  */
 bool proc_pmp_is_set(pid_t pid, pmp_slot_t slot)
 {
-	return _proc(pid)->pmp.addr[slot] != 0; // Check if the PMP slot is set.
+	return _proc(pid)->pmp.cfg[slot] != 0;
 }
 
 /**
@@ -104,11 +104,10 @@ word_t proc_get_register(pid_t pid, word_t regid)
  */
 bool proc_acquire(pid_t pid)
 {
-	proc_state_t state = _proc(pid)->state;
-	if (state != PROC_STATE_READY) {
+	if (_proc(pid)->state != PROC_STATE_READY) {
 		return false;
 	}
-	_proc(pid)->state = PROC_STATE_ACQUIRED; // Mark the process as acquired.
+	_proc(pid)->state = PROC_STATE_ACQUIRED;
 	return true;
 }
 
@@ -117,8 +116,7 @@ bool proc_acquire(pid_t pid)
  */
 void proc_suspend(pid_t pid)
 {
-	_proc(pid)->state &= PROC_STATE_ACQUIRED;  // Remove all other states but acquired.
-	_proc(pid)->state |= PROC_STATE_SUSPENDED; // Mark the process as suspended.
+	_proc(pid)->state = (_proc(pid)->state & PROC_STATE_ACQUIRED) | PROC_STATE_SUSPENDED;
 }
 
 /**
@@ -126,7 +124,7 @@ void proc_suspend(pid_t pid)
  */
 void proc_resume(pid_t pid)
 {
-	_proc(pid)->state &= ~PROC_STATE_SUSPENDED; // Remove the suspended state.
+	_proc(pid)->state &= ~(word_t)PROC_STATE_SUSPENDED;
 }
 
 /**
@@ -139,9 +137,9 @@ bool proc_ipc_acquire(pid_t pid, index_t i)
 	word_t desired = PROC_STATE_ACQUIRED;
 
 	if (_proc(pid)->state != expected) {
-		return false; // Process is not in the expected state, cannot acquire.
+		return false;
 	}
-	_proc(pid)->state = desired; // Mark the process as acquired.
+	_proc(pid)->state = desired;
 	return true;
 }
 
@@ -154,9 +152,9 @@ bool proc_ipc_block(pid_t pid, index_t i)
 	word_t expected = PROC_STATE_ACQUIRED;
 	word_t desired = PROC_STATE_BLOCKED | PROC_STATE_ACQUIRED | i << 4;
 	if (_proc(pid)->state != expected) {
-		return false; // Process is not in the expected state, cannot block.
+		return false;
 	}
-	_proc(pid)->state = desired; // Mark the process as blocked.
+	_proc(pid)->state = desired;
 	return true;
 }
 
@@ -165,5 +163,5 @@ bool proc_ipc_block(pid_t pid, index_t i)
  */
 void proc_release(pid_t pid)
 {
-	_proc(pid)->state &= ~PROC_STATE_ACQUIRED; // Mark the process as ready.
+	_proc(pid)->state &= ~(word_t)PROC_STATE_ACQUIRED;
 }

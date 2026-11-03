@@ -40,7 +40,7 @@ int main(s3k_word_t server)
 			printf("Failed to set PMP for derived memory %lx, err=%d\n", ram_base, err);
 			return 2;
 		}
-		/* s3k_mem_sync(); */
+		s3k_sync();
 		printf("app2 after sync\n");
 		msg.capty = 0;
 		msg.data[0] = *((uint64_t *)(ram_base));

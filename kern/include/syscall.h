@@ -5,7 +5,7 @@
 
 /**
  * System call handler.
- * Returns the process that should be run next.
- * Returns NULL if the scheduler should be invoked.
+ * Returns zero after releasing the caller, a positive PCB address to resume,
+ * or its negative value to reload PMP before resuming.
  */
-proc_t *syscall_handler(void);
+proc_result_t syscall_handler(void);

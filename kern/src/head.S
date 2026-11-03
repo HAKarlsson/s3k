@@ -1,5 +1,5 @@
 .extern trap_entry	// Address of the trap entry handler.
-.extern trap_resume	// Address of the trap resume handler.
+.extern trap_post	// Address of the trap post handler.
 .extern kernel_init	// Address of the kernel initialization function.
 
 .globl _start		
@@ -69,15 +69,16 @@ _init:
 
 	// Unlock the kernel initialization lock.
 	la	t1,_lock
-	amoor.w x0,t1,(t1)
+	li	t0,1
+	amoor.w.rl x0,t0,(t1)
 _wait:
 	la	t1,_lock
-	amoor.w   t1,x0,(t1)
+	amoor.w.aq t1,x0,(t1)
 	beqz	t1,_wait
 
 	// Initialize the first process and transfer control to it.
 	call	sched			// Call the scheduler to fetch the first process.
-	tail	trap_resume		// Jump to the trap resume handler.
+	tail	trap_post
 
 	// Harts with ID >= _NUM_HARTS should hang.
 _hang:

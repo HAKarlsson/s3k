@@ -1,5 +1,7 @@
 #include "mon.h"
 
+#include "cap.h"
+#include "current.h"
 #include "macro.h"
 #include "preempt.h"
 #include "proc.h"
@@ -47,6 +49,16 @@ int mon_transfer(pid_t owner, index_t i, pid_t new_owner)
 	return ERR_SUCCESS;
 }
 
+int mon_grant(pid_t owner, index_t i, capty_t type, index_t j)
+{
+	pid_t target = mon_get_pid(owner, i);
+	if (target == INVALID_PID) {
+		return ERR_INVALID_ACCESS;
+	}
+
+	return cap_transfer(owner, type, j, target);
+}
+
 int mon_introspect(pid_t owner, index_t i, fuel_t offset, mon_t *cap)
 {
 	if (UNLIKELY(!mon_valid_access(owner, i))) {
@@ -81,7 +93,7 @@ int mon_derive(pid_t owner, index_t i, pid_t target, fuel_t csize)
 		return ERR_INVALID_ACCESS;
 	}
 
-	if (UNLIKELY(csize <= 0 || mon_table[i].cfree < csize)) {
+	if (UNLIKELY(csize == 0 || csize >= mon_table[i].cfree)) {
 		return ERR_INVALID_ARGUMENT;
 	}
 
@@ -123,7 +135,7 @@ int mon_revoke(pid_t owner, index_t i)
 		mon_table[i].cfree += mon_table[j].cfree;
 
 		// Check for preemption.
-		if (UNLIKELY(preempt()))
+		if (UNLIKELY(revoke_preempt()))
 			break;
 	}
 
@@ -173,16 +185,21 @@ int mon_resume(pid_t owner, index_t i)
 /**
  * Yield the execution time to the process associated with the monitor capability.
  */
-int mon_yield(pid_t owner, index_t i, proc_t **next)
+proc_result_t mon_yield(pid_t owner, index_t i, word_t *status)
 {
 	if (UNLIKELY(!mon_valid_access(owner, i))) {
-		return ERR_INVALID_ACCESS;
+		*status = ERR_INVALID_ACCESS;
+		return proc_resume_result(current);
 	}
 	if (UNLIKELY(!proc_acquire(mon_table[i].pid))) {
-		return ERR_INVALID_STATE;
+		*status = ERR_INVALID_STATE;
+		return proc_resume_result(current);
 	}
-	*next = proc_get(mon_table[i].pid);
-	return ERR_SUCCESS;
+	proc_t *target = proc_get(mon_table[i].pid);
+	target->timeout = current->timeout;
+	*status = ERR_SUCCESS;
+	proc_release(owner);
+	return proc_reload_result(target);
 }
 
 /**

@@ -11,6 +11,6 @@
  *
  * @param cause The cause of the exception.
  * @param tval The trap value associated with the exception.
- * @return The updated process control block.
+ * @return The positive PCB address to resume without reloading PMP.
  */
-proc_t *exception_handler(word_t cause, word_t tval);
+proc_result_t exception_handler(word_t cause, word_t tval);
